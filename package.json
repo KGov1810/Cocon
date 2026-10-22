@@ -1,0 +1,18 @@
+{
+  "name": "cocon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cocon : pilotage des climatiseurs Atlantic Takao via Cozytouch, en application web pour iPhone.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

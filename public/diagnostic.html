@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f3ee" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121110" />
+    <meta name="robots" content="noindex" />
+    <title>Cocon · Diagnostic</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/diagnostic.css" />
+  </head>
+  <body>
+    <!-- Écran de connexion -->
+    <main id="signin" class="page signin" hidden>
+      <div class="stack">
+        <div class="stack stack--title">
+          <h1 class="brand brand--large">Cocon</h1>
+          <p class="muted">Diagnostic de votre installation</p>
+        </div>
+
+        <form id="signin-form" class="card stack" novalidate>
+          <div class="field">
+            <label for="access-key">Votre clé d'accès</label>
+            <input
+              id="access-key"
+              name="access-key"
+              type="password"
+              autocomplete="current-password"
+              autocapitalize="none"
+              autocorrect="off"
+              spellcheck="false"
+              enterkeyhint="go"
+              required
+            />
+          </div>
+          <p id="signin-error" class="notice notice--error" role="alert" hidden></p>
+          <button class="button button--primary" type="submit">Se connecter</button>
+        </form>
+
+        <details class="card">
+          <summary>Première installation : créer une clé</summary>
+          <div class="stack details__body">
+            <p class="small muted">
+              Chaque personne a sa propre clé. Générez-en une, puis ajoutez-la au secret
+              <span class="mono">ACCESS_KEYS</span> dans Cloudflare sous la forme
+              <span class="mono">Prénom:clé</span> (voir le README).
+            </p>
+            <button id="generate" class="button" type="button">Générer une clé</button>
+            <div id="generated" class="stack stack--tight" hidden>
+              <p id="generated-key" class="notice mono"></p>
+              <button id="copy-generated" class="button" type="button">Copier la clé</button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </main>
+
+    <!-- Rapport de diagnostic -->
+    <div id="report-view" hidden>
+      <header class="topbar">
+        <div class="topbar__inner">
+          <span class="brand">Cocon <small>· Diagnostic</small></span>
+          <span class="spacer"></span>
+          <span id="who" class="badge"></span>
+        </div>
+      </header>
+
+      <main class="page stack">
+        <p id="report-error" class="notice notice--error" role="alert" hidden></p>
+        <div id="loading" class="loading" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Lecture de votre installation…</span>
+        </div>
+
+        <div id="report" class="stack" hidden></div>
+
+        <div class="actions">
+          <button id="copy-report" class="button button--primary" type="button" disabled>
+            Copier le rapport
+          </button>
+          <button id="refresh" class="button" type="button">Actualiser</button>
+        </div>
+        <p id="copy-status" class="small muted" aria-live="polite"></p>
+        <textarea id="report-text" class="report" readonly hidden></textarea>
+
+        <button id="signout" class="button button--quiet" type="button">Se déconnecter</button>
+      </main>
+    </div>
+
+    <script type="module" src="/assets/diagnostic.js"></script>
+  </body>
+</html>

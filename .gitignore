@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+# Secrets pour les essais en local : ne jamais publier ce fichier.
+.dev.vars
+.DS_Store

@@ -1,0 +1,18 @@
+// Configuration du Worker Cloudflare « Cocon ».
+// Les secrets (identifiants Cozytouch, clés d'accès) ne sont PAS ici :
+// ils se saisissent dans le tableau de bord Cloudflare (voir README.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cocon",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+
+  // Fichiers de l'application, servis directement par Cloudflare.
+  // Les adresses /api/* n'existent pas dans ce dossier : elles arrivent au Worker.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  "observability": { "enabled": true }
+}

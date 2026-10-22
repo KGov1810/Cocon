@@ -1,0 +1,11 @@
+# Modèle pour les essais en local (copier en .dev.vars, jamais publié).
+# En production, ces valeurs se saisissent comme « secrets » dans Cloudflare.
+
+COZYTOUCH_EMAIL=votre.email@exemple.fr
+COZYTOUCH_PASSWORD=votre-mot-de-passe-cozytouch
+COZYTOUCH_CLIENT_ID=identifiant-technique-de-l-application-atlantic
+# Clés : 24 à 256 caractères parmi A-Z a-z 0-9 - _ (générées par la page /diagnostic).
+ACCESS_KEYS=Prenom1:remplacer-par-une-cle-generee-1, Prenom2:remplacer-par-une-cle-generee-2
+
+# Facultatif : remplacer l'API Atlantic par un faux serveur pour les essais.
+# ATLANTIC_API=http://127.0.0.1:8788

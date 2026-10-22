@@ -1,0 +1,116 @@
+/* Propre à la page de diagnostic. */
+
+.signin {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.stat__label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.stat__value {
+  font-size: 20px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.device__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.device__head h2 {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+details > summary {
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  padding: 10px 0 4px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::before {
+  content: "▸ ";
+  color: var(--text-muted);
+}
+details[open] > summary::before {
+  content: "▾ ";
+}
+.caps {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+.caps li {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+}
+.caps .id {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.caps .name {
+  overflow-wrap: anywhere;
+}
+.caps .value {
+  font-family: var(--mono);
+  font-size: 14px;
+  text-align: right;
+  max-width: 11em;
+  overflow-wrap: anywhere;
+}
+.timings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+textarea.report {
+  width: 100%;
+  min-height: 40vh;
+  font: 13px/1.4 var(--mono);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 12px;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  justify-content: center;
+}
+.device__model {
+  margin-top: 4px;
+}
+.details__body {
+  margin-top: 10px;
+}
