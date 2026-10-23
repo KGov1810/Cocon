@@ -11,20 +11,26 @@
  * par la page de diagnostic sur une installation Takao Plus réelle.
  */
 
+import { CommandError } from "./errors.js";
+import { overrideWrites, planSchedule, PROGRAM_CAP, readProgram } from "./program.js";
+
+export { CommandError };
+
+/** Décalage horaire du logement, en secondes (porté par le hub). */
+const TIME_OFFSET_CAP = 315;
+
 /** Numéros des capacités Atlantic utilisées. */
 const CAP = {
   mode: 7,
   heatSetpoint: 40,
   temperature: 117,
   name: 154,
-  override: 157,
   minHeat: 160,
   maxHeat: 161,
   minCool: 162,
   maxCool: 163,
   modes: 166,
   coolSetpoint: 177,
-  program: 184,
   step: 294,
   powerful: 100505,
   economy: 100507,
@@ -69,14 +75,6 @@ const TEMPERATURE_RANGE = { min: 4, max: 40 };
 /** Capacités présentes sur l'unité, gardées hors de la réponse JSON. */
 const CAPS = Symbol("capabilities");
 
-export class CommandError extends Error {
-  constructor(code, message) {
-    super(message);
-    this.name = "CommandError";
-    this.code = code;
-  }
-}
-
 const toNumber = (raw) => {
   const n = Number.parseFloat(raw);
   return Number.isFinite(n) ? n : null;
@@ -85,7 +83,7 @@ const toNumber = (raw) => {
 /** Arrondi à deux décimales (les valeurs Atlantic arrivent en 22 décimales). */
 const round = (n) => (n === null ? null : Math.round(n * 100) / 100);
 
-function readOne(device, zones) {
+function readOne(device, zones, { now, offsetSeconds }) {
   const caps = new Map((device.capabilities ?? []).map((c) => [c.capabilityId, c.value]));
   const has = (id) => caps.has(id);
   const num = (id) => round(toNumber(caps.get(id)));
@@ -138,8 +136,14 @@ function readOne(device, zones) {
     setpoint,
     setpointRange,
     temperature: temperatureValid ? measured : null,
-    program: String(caps.get(CAP.program)) === "1",
   };
+
+  const program = readProgram((id) => caps.get(id), { mode, now, offsetSeconds });
+  if (program) {
+    // Bornes des consignes du programme, en degrés entiers.
+    const whole = (range) => ({ min: Math.ceil(range.min), max: Math.floor(range.max) });
+    room.program = { ...program, ranges: { heat: whole(heatRange), cool: whole(coolRange) } };
+  }
 
   const sequence = FAN_SEQUENCES[String(caps.get(CAP.fanSequence))];
   if ((has(CAP.fanSpeed) && sequence) || has(CAP.quiet)) {
@@ -166,15 +170,28 @@ function readOne(device, zones) {
   return room;
 }
 
+/** Décalage horaire du logement en secondes (0 si aucun appareil ne le donne). */
+function timeOffset(devices) {
+  for (const device of devices) {
+    const found = (device.capabilities ?? []).find((c) => c.capabilityId === TIME_OFFSET_CAP);
+    const seconds = Number.parseInt(found?.value, 10);
+    if (Number.isInteger(seconds)) return seconds;
+  }
+  return 0;
+}
+
 /**
  * Pièces climatisées du logement : les unités qui portent un mode (capacité 7).
  * @param {object} setup  premier élément de la réponse setupviewv2
+ * @param {number} [now]  instant de référence (prochain changement du programme)
  */
-export function readRooms(setup) {
+export function readRooms(setup, now = Date.now()) {
+  const devices = setup?.devices ?? [];
   const zones = new Map((setup?.zones ?? []).map((z) => [z.id, z.name]));
-  return (setup?.devices ?? [])
+  const context = { now, offsetSeconds: timeOffset(devices) };
+  return devices
     .filter((device) => (device.capabilities ?? []).some((c) => c.capabilityId === CAP.mode))
-    .map((device) => readOne(device, zones));
+    .map((device) => readOne(device, zones, context));
 }
 
 const write = (capabilityId, value) => ({ capabilityId, value: String(value) });
@@ -188,7 +205,7 @@ function requireBoolean(value) {
  * Lève une CommandError si la demande n'est pas acceptable pour cette unité.
  *
  * @param {ReturnType<typeof readRooms>[number]} room  état actuel de la pièce
- * @param {string} setting  mode | setpoint | fan | louver | powerful | economy
+ * @param {string} setting  mode | setpoint | fan | louver | powerful | economy | program | schedule
  * @param {unknown} value
  * @returns {{ capabilityId: number, value: string }[]}
  */
@@ -223,12 +240,21 @@ export function planCommand(room, setting, value) {
         );
       }
       const target = room.mode === "cool" || room.mode === "dry" ? CAP.coolSetpoint : CAP.heatSetpoint;
-      const writes = [];
-      // Programme actif : il faut passer en dérogation, sinon le programme reprend la main.
-      if (room.program && has(CAP.override)) writes.push(write(CAP.override, "1"));
-      writes.push(write(target, value));
-      return writes;
+      // Programme actif : dérogation jusqu'au prochain créneau, sinon le programme
+      // reprendrait aussitôt la main.
+      return [...overrideWrites(room.program, has), write(target, value)];
     }
+
+    case "program": {
+      if (!room.program?.available) {
+        throw new CommandError("UNKNOWN_SETTING", "Programme indisponible sur cette unité.");
+      }
+      requireBoolean(value);
+      return [write(PROGRAM_CAP.mode, value ? "1" : "0")];
+    }
+
+    case "schedule":
+      return planSchedule(room.program, value, room.program?.ranges ?? {});
 
     case "fan": {
       if (!room.fanSpeeds?.includes(value)) {

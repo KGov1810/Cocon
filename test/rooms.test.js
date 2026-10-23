@@ -103,8 +103,8 @@ describe("lecture des pièces", () => {
   });
 
   it("signale le programme hebdomadaire actif", () => {
-    assert.equal(chambre().program, false);
-    assert.equal(chambre({ chambre: { 184: "1" } }).program, true);
+    assert.equal(chambre().program.active, false);
+    assert.equal(chambre({ chambre: { 184: "1" } }).program.active, true);
   });
 });
 
@@ -142,8 +142,19 @@ describe("préparation des commandes", () => {
     assert.throws(() => writes(chambre({ chambre: { 7: "7" } }), "setpoint", 21), CommandError);
   });
 
-  it("passe en dérogation avant de changer la consigne d'un programme actif", () => {
-    assert.deepEqual(writes(chambre({ chambre: { 184: "1" } }), "setpoint", 21), [
+  it("passe en dérogation (durée puis activation) avant de changer la consigne d'un programme actif", () => {
+    const planned = writes(chambre({ chambre: { 184: "1" } }), "setpoint", 21);
+    assert.deepEqual(
+      planned.map((w) => w.capabilityId),
+      [158, 157, 40],
+    );
+    assert.equal(planned[2].value, "21");
+  });
+
+  it("passe en dérogation sans durée si le programme n'a aucun créneau", () => {
+    const empty = "[[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]";
+    const days = Object.fromEntries(Array.from({ length: 7 }, (_, i) => [100320 + i, empty]));
+    assert.deepEqual(writes(chambre({ chambre: { 184: "1", ...days } }), "setpoint", 21), [
       { capabilityId: 157, value: "1" },
       { capabilityId: 40, value: "21" },
     ]);

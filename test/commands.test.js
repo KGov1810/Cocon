@@ -21,10 +21,18 @@ const ENV = {
  * Faux cloud Atlantic qui accepte les écritures.
  * `executionStates` : états successifs renvoyés pour chaque exécution.
  */
-function fakeAtlantic({ setup = makeSetup(), executionStates = [1, 3], writeStatus = 201, onSetup } = {}) {
+function fakeAtlantic({
+  setup = makeSetup(),
+  executionStates = [1, 3],
+  writeStatus = 201,
+  onSetup,
+  clock, // si fourni : une exécution est terminée `executionDelayMs` après son écriture
+  executionDelayMs = 1500,
+} = {}) {
   const calls = [];
   const writes = [];
   const polls = new Map();
+  const writtenAt = new Map();
   let nextExecution = 500;
 
   const reply = (status, body) => new Response(JSON.stringify(body), { status });
@@ -41,11 +49,13 @@ function fakeAtlantic({ setup = makeSetup(), executionStates = [1, 3], writeStat
       writes.push(JSON.parse(init.body));
       if (writeStatus !== 201) return reply(writeStatus, {});
       nextExecution += 1;
+      writtenAt.set(String(nextExecution), clock?.());
       return reply(201, nextExecution);
     }
     const execution = pathname.match(/^\/magellan\/executions\/(\d+)$/);
     if (execution) {
       const id = execution[1];
+      if (clock) return reply(200, { state: clock() - writtenAt.get(id) >= executionDelayMs ? 3 : 1 });
       const count = polls.get(id) ?? 0;
       polls.set(id, count + 1);
       const state = executionStates[Math.min(count, executionStates.length - 1)];
@@ -131,10 +141,46 @@ describe("commandes", () => {
     assert.deepEqual(
       writes.map((w) => [w.capabilityId, w.value]),
       [
+        // Horloge factice : jeudi 02:16 heure du logement ; prochain créneau à 06:00.
+        [158, "224"],
         [157, "1"],
         [40, "21"],
       ],
     );
+  });
+
+  const weekdays = {
+    setting: "schedule",
+    value: { kind: "heat", days: [0, 1, 2, 3, 4], slots: [{ minutes: 390, setpoint: 21 }] },
+  };
+  const executionPolls = (calls) => calls.filter((path) => /^\/magellan\/executions\/\d+$/.test(path)).length;
+
+  it("écrit un programme sur plusieurs jours sans dépasser le quota d'Atlantic", async () => {
+    const time = fakeTime();
+    const { fetchImpl, writes, calls } = fakeAtlantic({ clock: time.now });
+    const res = await handleApi(command(1001, weekdays), ENV, { fetchImpl, ...time });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).status, "confirmed");
+    assert.deepEqual(
+      writes.map((w) => w.capabilityId),
+      [100320, 100321, 100322, 100323, 100324],
+    );
+    // Suivre chaque jour jusqu'à sa confirmation coûterait au moins 2 lectures par
+    // jour ; on suit la dernière écriture puis on vérifie les autres une fois.
+    assert.ok(executionPolls(calls) <= writes.length + 2, `${executionPolls(calls)} lectures d'exécution`);
+  });
+
+  it("répond « en attente » si le programme n'est pas encore confirmé", async () => {
+    const { fetchImpl } = fakeAtlantic({ executionStates: [1] });
+    const res = await handleApi(command(1001, weekdays), ENV, { fetchImpl, ...fakeTime() });
+    assert.equal(res.status, 202);
+  });
+
+  it("signale un programme refusé par l'unité", async () => {
+    const { fetchImpl } = fakeAtlantic({ executionStates: [5] });
+    const res = await handleApi(command(1001, weekdays), ENV, { fetchImpl, ...fakeTime() });
+    assert.equal(res.status, 502);
+    assert.equal((await res.json()).error.code, "COMMAND_FAILED");
   });
 
   it("répond « en attente » si Atlantic ne confirme pas à temps", async () => {

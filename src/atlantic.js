@@ -158,15 +158,16 @@ export function createAtlanticClient(env, deps = {}) {
   }
 
   /**
-   * Requête authentifiée (GET, ou POST JSON si `json` est fourni). Si Atlantic
-   * rejette le jeton (401), on se reconnecte une seule fois puis on réessaie.
+   * Requête authentifiée (GET, ou POST JSON si `json` est fourni, ou la méthode
+   * indiquée). Si Atlantic rejette le jeton (401), on se reconnecte une seule
+   * fois puis on réessaie.
    * @returns {Promise<{ status: number, body: unknown }>}
    */
-  async function authed(label, path, json) {
+  async function authed(label, path, json, method = json === undefined ? "GET" : "POST") {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const bearer = await token({ force: attempt > 0 });
       const response = await timedFetch(label, `${base}${path}`, {
-        method: json === undefined ? "GET" : "POST",
+        method,
         headers: {
           Authorization: `Bearer ${bearer}`,
           ...(json === undefined ? {} : { "Content-Type": "application/json" }),
@@ -232,6 +233,15 @@ export function createAtlanticClient(env, deps = {}) {
       });
       const id = typeof body === "number" || typeof body === "string" ? String(body) : null;
       return { status, executionId: status === 201 && id && /^\d+$/.test(id) ? id : null };
+    },
+
+    /**
+     * Remplace les champs modifiables du logement (utilisé pour l'absence).
+     * @returns {Promise<{ status: number }>}
+     */
+    async putSetup(setupId, body) {
+      const { status } = await authed("logement (écriture)", `/magellan/v2/setups/${encodeURIComponent(setupId)}`, body, "PUT");
+      return { status };
     },
 
     /**

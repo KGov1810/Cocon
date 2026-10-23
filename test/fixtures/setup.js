@@ -4,6 +4,9 @@
 
 const cap = (capabilityId, value) => ({ capabilityId, value });
 
+/** Programme d'origine des unités : 20 °C à 6 h, 19 °C à 22 h, chaque jour. */
+export const DEFAULT_DAY = "[[360,20,0],[1320,19,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]";
+
 /** Capacités d'une pièce climatisée ; `overrides` remplace des valeurs. */
 export function roomCapabilities(overrides = {}) {
   const base = {
@@ -12,6 +15,8 @@ export function roomCapabilities(overrides = {}) {
     117: "22.25", // température mesurée
     154: "Chambre", // nom de la pièce
     157: "0", // dérogation au programme
+    158: "120", // durée de dérogation (min)
+    159: "0", // dérogation restante (min)
     160: "16.0000000000000000000",
     161: "30.0000000000000000000",
     162: "18.0000000000000000000",
@@ -19,7 +24,14 @@ export function roomCapabilities(overrides = {}) {
     166: "411", // modes : arrêt, auto, froid, chaud, ventilation, déshumidification
     177: "26.00000000000000000000", // consigne froid
     184: "0", // BASIC (programme inactif)
+    217: "3331", // BASIC, PROG_INT, économie, absence, absence programmée
     294: "0.5000000000000000000", // pas de consigne
+    295: "15", // pas des horaires du programme (min)
+    296: "60", // écart minimal entre deux changements (min)
+    306: "8", // changements maximum par jour
+    347: "0", // changements minimum par jour
+    348: "1", // changements minimum par semaine
+    100013: "1", // états étendus du programme : Arrêt
     100505: "0", // pleine puissance
     100507: "1", // économie d'énergie
     100800: "2", // vitesses : basse, moyenne, haute, auto
@@ -29,14 +41,20 @@ export function roomCapabilities(overrides = {}) {
     100804: "0", // balayage
     103150: "1", // température valide
   };
+  // Programmes chaud (100320 = lundi … 100326 = dimanche) et froid (100327 … 100333).
+  for (let id = 100320; id <= 100333; id += 1) base[id] = DEFAULT_DAY;
   return Object.entries({ ...base, ...overrides }).map(([id, value]) => cap(Number(id), value));
 }
 
-export function makeSetup({ chambre = {}, salon = {}, salonAvailable = true } = {}) {
+export function makeSetup({ chambre = {}, salon = {}, hub = {}, salonAvailable = true } = {}) {
+  const hubCaps = { 152: "0", 172: "10", 222: "[0,0]", 315: "7200", ...hub };
   return {
     id: 900001,
     name: "setup1",
     rateLimit: 30,
+    address: "1 rue Secrète",
+    type: 1,
+    numberOfRooms: 2,
     zones: [
       { id: 10, name: "zoneTechnique" },
       { id: 11, name: "Chambre" },
@@ -49,7 +67,7 @@ export function makeSetup({ chambre = {}, salon = {}, salonAvailable = true } = 
         modelId: 1457,
         zoneId: 10,
         isAvailable: true,
-        capabilities: [cap(152, "0"), cap(172, "10")],
+        capabilities: Object.entries(hubCaps).map(([id, value]) => cap(Number(id), value)),
       },
       {
         deviceId: 1001,

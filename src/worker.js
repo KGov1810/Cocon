@@ -11,7 +11,7 @@
 
 import { AtlanticError, createAtlanticClient } from "./atlantic.js";
 import { clearedSessionCookie, identify, matchKey, sessionCookie } from "./auth.js";
-import { readState, runCommand } from "./commands.js";
+import { readState, runAbsence, runCommand } from "./commands.js";
 import { buildDiagnostic } from "./diagnostic.js";
 import { CommandError } from "./rooms.js";
 
@@ -147,6 +147,18 @@ export async function handleApi(request, env, deps = {}) {
         { now, sleep: deps.sleep ?? defaultSleep },
       );
       console.log("Commande", who.name, roomMatch[1], body.setting, result.status, `${result.elapsedMs} ms`);
+      return json(result, result.status === "confirmed" ? 200 : 202);
+    }
+
+    if (route === "POST /api/absence" || route === "DELETE /api/absence") {
+      let window = null; // DELETE : annuler l'absence
+      if (request.method === "POST") {
+        window = await readSmallJson(request);
+        if (!window || typeof window !== "object") return apiError(400, "BAD_REQUEST", "Absence invalide.");
+      }
+      const client = createAtlanticClient(env, deps);
+      const result = await runAbsence(client, env, window, { now, sleep: deps.sleep ?? defaultSleep });
+      console.log("Absence", who.name, window ? "programmée" : "annulée", result.status, `${result.elapsedMs} ms`);
       return json(result, result.status === "confirmed" ? 200 : 202);
     }
 

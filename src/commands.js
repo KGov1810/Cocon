@@ -8,6 +8,7 @@
  *      jusqu'à confirmation, refus, ou expiration du délai d'attente.
  */
 
+import { absenceDevice, ABSENCE_CAP, planAbsence, readAbsence, setupBody, windowValue } from "./absence.js";
 import { CommandError, planCommand, readRooms } from "./rooms.js";
 
 /** Âge maximal de l'état en cache pour valider une commande. */
@@ -45,7 +46,11 @@ async function loadSetup(client, env, now, maxAgeMs) {
 /** État complet des pièces, toujours relu chez Atlantic. */
 export async function readState(client, env, now) {
   const setup = await loadSetup(client, env, now, 0);
-  return { rooms: readRooms(setup), updatedAt: new Date(now()).toISOString() };
+  return {
+    rooms: readRooms(setup, now()),
+    absence: readAbsence(setup),
+    updatedAt: new Date(now()).toISOString(),
+  };
 }
 
 /** Suit une exécution : "confirmed", "pending" (délai dépassé) ou "failed". */
@@ -60,6 +65,50 @@ async function waitForExecution(client, executionId, sleep) {
   return "pending";
 }
 
+/** Lecture unique de l'état d'une exécution déjà en cours. */
+async function checkExecution(client, executionId) {
+  const state = await client.getExecutionState(executionId);
+  if (state === EXECUTION_DONE) return "confirmed";
+  if (state === null || state === EXECUTION_WAITING || state === EXECUTION_RUNNING) return "pending";
+  return "failed";
+}
+
+async function send(client, roomId, { capabilityId, value }) {
+  const { status, executionId } = await client.writeCapability(roomId, capabilityId, value);
+  if (!executionId) {
+    throw new CommandError("COMMAND_REFUSED", `Atlantic a refusé la commande (HTTP ${status}).`);
+  }
+  return executionId;
+}
+
+/**
+ * Écritures dépendantes (ex. durée de dérogation, puis dérogation, puis
+ * consigne) : chacune attend la confirmation de la précédente.
+ */
+async function runInOrder(client, roomId, writes, sleep) {
+  const outcomes = [];
+  for (const write of writes) {
+    const outcome = await waitForExecution(client, await send(client, roomId, write), sleep);
+    if (outcome === "failed") return ["failed"];
+    outcomes.push(outcome);
+  }
+  return outcomes;
+}
+
+/**
+ * Écritures indépendantes (un jour de programme par écriture) : on envoie tout,
+ * on suit la dernière jusqu'au bout, puis on vérifie les autres une seule fois.
+ * Suivre chaque jour séparément dépasserait vite le quota d'Atlantic (≈ 30 req/min).
+ */
+async function runAsBatch(client, roomId, writes, sleep) {
+  const executions = [];
+  for (const write of writes) executions.push(await send(client, roomId, write));
+  const last = await waitForExecution(client, executions.at(-1), sleep);
+  const others = [];
+  for (const executionId of executions.slice(0, -1)) others.push(await checkExecution(client, executionId));
+  return [...others, last];
+}
+
 /**
  * Valide puis exécute une commande sur une pièce.
  * @returns {Promise<{ status: "confirmed" | "pending", elapsedMs: number }>}
@@ -68,26 +117,49 @@ async function waitForExecution(client, executionId, sleep) {
 export async function runCommand(client, env, { roomId, setting, value }, { now, sleep }) {
   const started = now();
   const setup = await loadSetup(client, env, now, SETUP_MAX_AGE_MS);
-  const room = readRooms(setup).find((r) => r.id === roomId);
+  const room = readRooms(setup, now()).find((r) => r.id === roomId);
   if (!room) throw new CommandError("ROOM_NOT_FOUND", "Pièce introuvable.");
 
   const writes = planCommand(room, setting, value);
-  let pending = false;
+  let outcomes;
   try {
-    for (const { capabilityId, value: raw } of writes) {
-      const { status, executionId } = await client.writeCapability(roomId, capabilityId, raw);
-      if (!executionId) {
-        throw new CommandError("COMMAND_REFUSED", `Atlantic a refusé la commande (HTTP ${status}).`);
-      }
-      const outcome = await waitForExecution(client, executionId, sleep);
-      if (outcome === "failed") {
-        throw new CommandError("COMMAND_FAILED", "L'unité n'a pas pu appliquer la commande.");
-      }
-      if (outcome === "pending") pending = true;
-    }
+    outcomes =
+      setting === "schedule"
+        ? await runAsBatch(client, roomId, writes, sleep)
+        : await runInOrder(client, roomId, writes, sleep);
   } finally {
     // L'état a (peut-être) changé : la prochaine lecture doit venir d'Atlantic.
     setupCache = null;
   }
-  return { status: pending ? "pending" : "confirmed", elapsedMs: now() - started };
+  if (outcomes.includes("failed")) {
+    throw new CommandError("COMMAND_FAILED", "L'unité n'a pas pu appliquer la commande.");
+  }
+  return { status: outcomes.includes("pending") ? "pending" : "confirmed", elapsedMs: now() - started };
+}
+
+/**
+ * Programme ou annule l'absence de tout le logement.
+ * @param {{ start: number, end: number } | null} request  null pour annuler
+ */
+export async function runAbsence(client, env, request, { now, sleep }) {
+  const started = now();
+  const window = request === null ? null : planAbsence(request, now());
+  const setup = await loadSetup(client, env, now, SETUP_MAX_AGE_MS);
+  const hub = absenceDevice(setup);
+  if (!hub) throw new CommandError("UNKNOWN_SETTING", "Ce logement ne propose pas de mode Absence.");
+
+  let outcome;
+  try {
+    const { status } = await client.putSetup(setup.id, setupBody(setup, window));
+    if (status < 200 || status >= 300) {
+      throw new CommandError("COMMAND_REFUSED", `Atlantic a refusé l'absence (HTTP ${status}).`);
+    }
+    // Le logement a pris la fenêtre ; on la recopie sur le hub, comme l'appli
+    // Cozytouch. Un refus du hub n'annule pas l'absence : elle reste « en attente ».
+    const { executionId } = await client.writeCapability(hub.deviceId, ABSENCE_CAP.window, windowValue(window));
+    outcome = executionId ? await waitForExecution(client, executionId, sleep) : "pending";
+  } finally {
+    setupCache = null;
+  }
+  return { status: outcome === "confirmed" ? "confirmed" : "pending", elapsedMs: now() - started };
 }
