@@ -13,8 +13,12 @@ iPhone (appli web Cocon)  →  Worker Cloudflare « cocon »  →  Cloud Atlanti
 | Relais (Worker Cloudflare) | Vérifie la clé d'accès, se connecte à Atlantic avec les secrets, appelle l'API, renvoie des erreurs compréhensibles. Sert aussi les fichiers de l'application. | `src/worker.js`, `src/auth.js` |
 | Client Atlantic | Seul endroit qui connaît l'API Magellan : connexion, jeton en cache, reconnexion sur 401, gestion du quota (429) et des délais, écriture d'une capacité et suivi de son exécution. | `src/atlantic.js` |
 | Modèle des pièces | Traduit la vue brute d'Atlantic en pièces (mode, consignes et bornes, température valide, ventilation, volets, options), et valide chaque commande avant de la traduire en écritures de capacités. | `src/rooms.js` |
-| Commandes | Lit l'état (avec un cache de 60 s pour les commandes), exécute les écritures dans l'ordre et suit leur confirmation. | `src/commands.js` |
-| Tableau de bord | Panneaux Chambre / Salon colorés selon l'état, fiche de réglages par pièce, suivi des commandes. | `public/index.html`, `public/assets/app.*`, `public/assets/logic.js` |
+| Programme | Lit les programmes chaud et froid, calcule le prochain changement à l'heure du logement, valide un jour de programme et le traduit en écritures. Gère aussi la dérogation jusqu'au prochain changement. | `src/program.js` |
+| Absence | Lit l'état sur le hub ; valide une fenêtre ; prépare le PUT du logement. | `src/absence.js` |
+| Commandes | Lit l'état (avec un cache de 60 s pour les commandes), exécute les écritures et suit leur confirmation. Gère aussi l'absence. | `src/commands.js`, `src/errors.js` |
+| Tableau de bord | Panneaux Chambre / Salon colorés selon l'état, fiche de réglages par pièce, suivi des commandes. | `public/index.html`, `public/assets/app.*`, `public/assets/logic.js`, `public/assets/ui.js` |
+| Programme et absence (interface) | Ligne de programme sur les panneaux, éditeur jour par jour, bandeau et fiche Absence. | `public/assets/program-editor.js`, `public/assets/absence-view.js` |
+| Installation sur l'écran d'accueil | Manifeste et icônes. | `public/manifest.webmanifest`, `public/assets/icons/` |
 | Diagnostic | Lecture seule de tout ce que le compte expose, données sensibles masquées. | `src/diagnostic.js`, `public/diagnostic.html` |
 
 ## Choix techniques
@@ -81,6 +85,44 @@ Téléphone                    Relais                               Atlantic
   3 lectures par minute et par téléphone, plus 2 à 7 requêtes par commande. Le
   quota Atlantic est de 30 requêtes par minute, partagé avec l'appli officielle.
 
+## Programme hebdomadaire
+
+Chaque unité stocke deux programmes de 7 jours, chaud (capacités 100320 à 100326, du
+lundi au dimanche) et froid (100327 à 100333). Un jour est une chaîne de 10 triplets
+`[minute, consigne, état]`, les emplacements inutilisés valant `[0,0,0]`. L'état 1
+signifie **Arrêt** : c'est ce que dit le catalogue Atlantic (capacité 100013), mais
+cela reste à confirmer sur l'unité (voir l'essai guidé du README). Les règles
+viennent de l'unité : pas de 15 min (295), au moins 60 min entre deux changements
+(296), au plus 8 changements par jour (306) et au moins 1 par semaine (348).
+
+- **Activation** : capacité 184 (0 manuel, 1 programme).
+- **Dérogation** : quand on change la consigne pendant un programme actif, le relais
+  écrit d'abord la durée jusqu'au prochain changement (158, au plus 24 h), puis
+  active la dérogation (157), puis écrit la consigne.
+- **Heure du logement** : le prochain changement est calculé avec le décalage
+  horaire porté par le hub (315).
+- **Écriture de plusieurs jours** : on envoie toutes les écritures, puis on suit la
+  dernière jusqu'au bout et on vérifie les autres une seule fois. Pour 7 jours, cela
+  fait environ 20 requêtes au lieu d'une cinquantaine. Le quota d'Atlantic est
+  d'environ 30 requêtes par minute.
+
+## Mode Absence
+
+L'absence vaut pour tout le logement. Le relais envoie
+`PUT /magellan/v2/setups/<id>` avec les champs modifiables du logement (recopiés
+depuis Atlantic) et `absence: { startDate, endDate }` en secondes Unix, ou un objet
+vide pour l'annuler. Il recopie ensuite la fenêtre sur le hub (capacité 222). Si le
+hub refuse cette copie, l'absence reste enregistrée sur le logement : la réponse est
+« en attente ». L'état se lit sur le hub : 152 vaut 0 (désactivée), 1 (en cours) ou
+2 (programmée).
+
+| Route | Rôle |
+| --- | --- |
+| `GET /api/state` | Pièces (avec leur programme) et absence |
+| `POST /api/rooms/:id` | Réglages : `mode`, `setpoint`, `fan`, `louver`, `powerful`, `economy`, `program`, `schedule` |
+| `POST /api/absence` | Programmer une absence `{ start, end }` (secondes Unix) |
+| `DELETE /api/absence` | Annuler l'absence |
+
 ## Sécurité
 
 - Secrets Cloudflare : `COZYTOUCH_EMAIL`, `COZYTOUCH_PASSWORD`, `COZYTOUCH_CLIENT_ID`,
@@ -98,6 +140,13 @@ Téléphone                    Relais                               Atlantic
 - Page : CSP stricte (`script-src 'self'`, `style-src 'self'`, sans code en ligne),
   HSTS, `frame-ancestors 'none'`, aucune ressource externe. Les données d'Atlantic
   sont insérées comme texte, jamais comme HTML.
+- Programme : chaque jour est validé par le relais (horaires, écart, nombre de
+  changements, degrés entiers dans les bornes, état Arrêt seulement si l'unité le
+  déclare) puis réécrit par lui. Les valeurs envoyées par le téléphone ne sont jamais
+  transmises telles quelles.
+- Absence : les dates doivent être des entiers. Le départ ne peut pas être passé
+  (5 min de tolérance), le retour doit le suivre d'au moins 15 min et arriver dans
+  moins d'un an. Le PUT ne renvoie que les champs modifiables du logement.
 - Commandes : la pièce doit exister dans le logement et être une pièce climatisée
   (le hub est refusé). Le réglage doit faire partie d'une liste fermée et la valeur
   doit être autorisée par l'unité : modes déclarés, bornes et pas de consigne,
@@ -138,4 +187,5 @@ Téléphone                    Relais                               Atlantic
 2. **Application** : tableau de bord Salon / Chambre, toutes les commandes exposées,
    suivi de chaque commande (envoyée, confirmée, échec) avec son délai. *(terminée)*
 3. **Programmation et finition** : éditeur du programme hebdomadaire, mode Absence
-   (toute la maison), icône et installation PWA, README final.
+   (toute la maison), icône et installation PWA, README final. *(terminée, essai
+   guidé sur les unités à faire)*

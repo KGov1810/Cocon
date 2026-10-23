@@ -29,8 +29,8 @@ Lues par la page `/diagnostic` sur les deux unités (`ROOM_0` = Chambre,
 | Volets : 4 positions fixes ou balayage | 100803, 100804 | Oui. Le catalogue annonce 6 positions, mais l'essai sur l'unité (octobre 2026) a montré que 5 et 6 n'existent pas. |
 | Pleine puissance | 100505 | Oui |
 | Économie d'énergie (limite de puissance) | 100507 (activée d'origine sur les deux unités) | Oui. Absente de l'appli Cozytouch. L'essai (octobre 2026) confirme qu'elle bride la puissance : la couper accélère la chauffe. |
-| Programme hebdomadaire chaud et froid (2 à 8 plages par jour) | 184 (BASIC / PROG), 100320 à 100333, dérogation 157 et 158 | Phase 3 (dérogation déjà gérée) |
-| Absence (toute la maison) | Hub : 152, 172, 222 | Phase 3 |
+| Programme hebdomadaire chaud et froid (jusqu'à 8 changements par jour, au quart d'heure, 1 h d'écart minimum) | 184 (BASIC / PROG), 100320 à 100333, dérogation 157, 158, 159, règles 295, 296, 306, 348 | Oui (phase 3). Créneau « Arrêt » (état 1, capacité 100013) d'après le catalogue, à confirmer par l'essai guidé. |
+| Absence (toute la maison) | Logement (`PUT /magellan/v2/setups/<id>`), hub : 152, 222 | Oui (phase 3), à confirmer par l'essai guidé. Les climatiseurs s'arrêtent pendant l'absence. |
 | Indicateur « chauffe / refroidit en cours » | 153 | Non : sa valeur ne change jamais sur cette installation |
 | Mode éco du catalogue (préréglage) | — | Absent de l'installation |
 
@@ -56,6 +56,10 @@ Conclusions :
   quelques secondes alors que l'unité réagit 1 à 2 min plus tard, le délai se situe
   entre le cloud et le hub ou l'unité, hors de portée d'une application.
 - La lecture complète de l'état prend environ 1,9 s chez Atlantic.
+- **Constat (octobre 2026)** : le délai affiché par Cocon correspond à la réaction réelle
+  de l'unité. Le reste de l'attente vient de l'unité elle-même. Le programme
+  hebdomadaire est la vraie parade, puisqu'il met la pièce à température à l'heure
+  voulue.
 - **Ce que Cocon améliore réellement** : un retour visuel immédiat (envoi, confirmation
   du cloud, échec), un état rafraîchi plus souvent pendant qu'on regarde l'écran, et
   surtout la **programmation hebdomadaire**, qui met la pièce à température à l'heure

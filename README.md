@@ -7,9 +7,11 @@ Gratuite, installable depuis Safari, en français, en mode clair et sombre.
 > ⚠️ Projet personnel, sans lien avec Groupe Atlantic. Il utilise l'API non officielle
 > de l'application Cozytouch, qui peut changer sans préavis.
 
-**État : phase 2.** Le tableau de bord pilote chaque pièce : marche et arrêt, mode,
-consigne, ventilation, silence, volets, pleine puissance et économie d'énergie.
-La programmation hebdomadaire et le mode Absence arrivent en phase 3.
+**État : phase 3.** Le tableau de bord pilote chaque pièce : marche et arrêt, mode,
+consigne, ventilation, silence, volets, pleine puissance et économie d'énergie. Il
+gère aussi le programme hebdomadaire de chaque unité et le mode Absence de toute la
+maison. Les créneaux « Arrêt » du programme et le mode Absence restent à valider sur
+les unités (voir [Essai guidé](#essai-guidé-phase-3)).
 
 - [Analyse de faisabilité](docs/FAISABILITE.md)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -72,9 +74,9 @@ Pour couper l'accès d'une personne, retirez son entrée.
 
 Ouvrez `https://cocon.<votre-sous-domaine>.workers.dev` dans Safari et connectez-vous
 avec votre clé : la session dure 180 jours. Pour l'avoir comme une appli, touchez
-**Partager → Sur l'écran d'accueil**. Il peut vous être demandé de vous
-reconnecter depuis l'icône, car l'appli installée peut avoir ses propres réglages. Une icône dédiée arrivera en
-phase 3.
+**Partager → Sur l'écran d'accueil** : l'icône braise et glacier apparaît, et l'appli
+s'ouvre en plein écran. Il peut vous être demandé de vous reconnecter depuis l'icône,
+car l'appli installée peut avoir ses propres réglages.
 
 **L'écran principal** montre une pièce par panneau. La couleur indique l'état :
 
@@ -107,9 +109,56 @@ de l'unité pour consommer moins. L'essai l'a confirmé : activé, il rend la ch
 moins puissante. Il était activé d'origine sur les deux unités. Coupez-le pour chauffer
 ou refroidir plus vite, et réactivez-le pour économiser.
 
+**Programme hebdomadaire** (fiche Réglages → *Programme*) :
+- **Suivre le programme** : l'unité applique d'elle-même les changements prévus, même
+  téléphone éteint. Le panneau de la pièce indique le prochain, par exemple
+  « Programme : 19° à 22:00 ».
+- **Modifier le programme** : choisissez le programme *Chauffage* ou *Froid* et le jour,
+  puis ajoutez ou modifiez les changements (heure au quart d'heure, température en
+  degrés entiers, ou **Arrêt**). *Appliquer à* recopie le jour sur « Lun–ven »,
+  « Sam–dim » ou « Toute la semaine ». Les règles de l'unité s'appliquent : au plus
+  8 changements par jour, et au moins 1 h entre deux.
+- **Changer la consigne pendant que le programme tourne** la modifie à la main
+  jusqu'au prochain changement prévu, puis le programme reprend.
+
+**Absence** (menu **…** → *Absence*, ou le bandeau en haut quand une absence est
+prévue) : départ maintenant ou plus tard, et date de retour. Les climatiseurs
+s'arrêtent pendant l'absence et reprennent leur mode au retour. Elle s'annule d'un
+appui.
+
 **Pour la deuxième personne** : générez-lui une clé depuis le diagnostic, ajoutez-la
 au secret `ACCESS_KEYS` (`Kevin:clé1, Prénom:clé2`), puis envoyez-lui l'adresse et
-sa clé. Le menu **…** en haut à droite donne accès au diagnostic et à la déconnexion.
+sa clé. Le menu **…** en haut à droite donne accès à l'absence, au diagnostic et à la
+déconnexion.
+
+## Essai guidé (phase 3)
+
+Deux points reposent sur le catalogue d'Atlantic et doivent être confirmés sur une
+unité. Comptez environ 1 h 30 pour l'essai A, à faire de jour, et 30 min pour
+l'essai B. Notez l'état de départ : le programme d'origine est 20 °C à 06:00 et
+19 °C à 22:00, chaque jour.
+
+**A. Créneau « Arrêt » du programme** (sur la Chambre, unité allumée en chauffage)
+1. Fiche Réglages → *Modifier le programme* → *Chauffage*, jour d'aujourd'hui.
+2. Ajoutez un **Arrêt** au prochain quart d'heure, dans au moins 20 min. Ajoutez
+   ensuite une **température** (par exemple 21°) 1 h plus tard. Enregistrez avec
+   *Ce jour*.
+3. Retour → activez **Suivre le programme**.
+4. À l'heure de l'arrêt, l'unité s'arrête-t-elle vraiment ? Une heure plus tard,
+   repart-elle à 21° ?
+5. Ouvrez le diagnostic, touchez **Copier le rapport** et transmettez-le : il montre
+   comment l'unité a enregistré le créneau.
+6. Remettez le programme d'origine (06:00 → 20°, 22:00 → 19°, *Toute la semaine*),
+   puis désactivez *Suivre le programme* si vous ne voulez pas l'utiliser.
+
+**B. Absence**
+1. Menu **…** → *Absence* → *Départ maintenant*, retour dans 30 min →
+   *Programmer l'absence*.
+2. Les deux unités s'arrêtent-elles ? Le bandeau « Absence en cours » apparaît-il ?
+3. *Modifier* → **Annuler l'absence** : les unités repartent-elles dans leur mode ?
+
+Si une étape ne se passe pas comme prévu, notez ce que vous voyez (appli, unité,
+messages) et transmettez le rapport du diagnostic.
 
 ## Mises à jour
 
