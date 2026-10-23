@@ -470,7 +470,7 @@ function renderSheet() {
         el(
           "p",
           { class: "group__help" },
-          "Position fixe, de 1 (le plus haut) à 6 (le plus bas). Les positions 5 et 6 sont à confirmer sur votre unité.",
+          `Position fixe, de 1 (le plus haut) à ${positions.length} (le plus bas).`,
         ),
       ]),
     );

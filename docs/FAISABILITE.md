@@ -26,7 +26,7 @@ Lues par la page `/diagnostic` sur les deux unités (`ROOM_0` = Chambre,
 | Température mesurée | 117, validité 103150 | Oui (affichée « — » hors 4 à 40 °C, par exemple −50 °C quand l'unité est arrêtée) |
 | Ventilation : basse, moyenne, haute, auto | 100801 (séquence 100800 = 2) | Oui |
 | Silence | 100802 | Oui |
-| Volets : 6 positions fixes ou balayage | 100803, 100804 | Oui (positions 5 et 6 à confirmer sur l'unité) |
+| Volets : 4 positions fixes ou balayage | 100803, 100804 | Oui. Le catalogue annonce 6 positions, mais l'essai sur l'unité (octobre 2026) a montré que 5 et 6 n'existent pas. |
 | Pleine puissance | 100505 | Oui |
 | Économie d'énergie | 100507 (activée sur les deux unités) | Oui, marquée expérimentale : absente de l'appli Cozytouch, effet non documenté |
 | Programme hebdomadaire chaud et froid (2 à 8 plages par jour) | 184 (BASIC / PROG), 100320 à 100333, dérogation 157 et 158 | Phase 3 (dérogation déjà gérée) |

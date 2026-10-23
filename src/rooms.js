@@ -57,8 +57,11 @@ const FAN_SEQUENCES = {
   3: ["auto", "low", "high"],
 };
 
-/** Positions fixes des volets (catalogue Atlantic : 6 positions Fujitsu). */
-const LOUVER_POSITIONS = ["1", "2", "3", "4", "5", "6"];
+/**
+ * Positions fixes des volets. Le catalogue Atlantic en annonce 6 (Fujitsu),
+ * mais l'essai sur le Takao Plus n'en a trouvé que 4.
+ */
+const LOUVER_POSITIONS = ["1", "2", "3", "4"];
 
 /** Plage de mesure valide de la température ambiante (catalogue, capacité 117). */
 const TEMPERATURE_RANGE = { min: 4, max: 40 };

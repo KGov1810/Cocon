@@ -91,7 +91,8 @@ phase 3.
 - **⏻** éteint la pièce. **Allumer** la rallume dans le dernier mode utilisé, ou par
   défaut en chauffage d'octobre à avril et en froid le reste de l'année.
 - **Réglages** ouvre la fiche complète de la pièce : mode, consigne, ventilation,
-  silence, volets, pleine puissance et économie d'énergie.
+  silence, volets (balayage ou 4 positions fixes), pleine puissance et économie
+  d'énergie.
 
 **Sous chaque pièce**, une ligne suit la dernière commande : « Envoi à Atlantic… »,
 puis « Confirmé par Atlantic en 2,1 s », un message d'attente ou la raison d'un refus.
@@ -101,12 +102,10 @@ revient.
 **Une seule unité extérieure** ne peut pas chauffer une pièce et refroidir l'autre en
 même temps. Cocon le signale et demande de confirmer un tel choix d'un second appui.
 
-**Réglages expérimentaux** :
+**Réglage expérimental** :
 - *Économie d'énergie* est activée sur les deux unités mais absente de l'appli
   Cozytouch. Son effet exact n'est pas documenté : essayez de la couper si la chauffe
   vous paraît lente.
-- *Positions 5 et 6 des volets* : le catalogue Atlantic en annonce 6. Si l'unité
-  refuse une position, Cocon affiche « L'unité n'a pas pu appliquer la commande ».
 
 **Pour la deuxième personne** : générez-lui une clé depuis le diagnostic, ajoutez-la
 au secret `ACCESS_KEYS` (`Kevin:clé1, Prénom:clé2`), puis envoyez-lui l'adresse et

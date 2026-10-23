@@ -72,13 +72,14 @@ describe("lecture des pièces", () => {
     assert.equal(room.fan, "quiet"); // le silence l'emporte sur la vitesse
     assert.deepEqual(room.fanSpeeds, ["auto", "low", "medium", "high", "quiet"]);
     assert.equal(room.louver, "swing");
-    assert.deepEqual(room.louvers, ["swing", "1", "2", "3", "4", "5", "6"]);
+    assert.deepEqual(room.louvers, ["swing", "1", "2", "3", "4"]);
     assert.equal(room.powerful, true);
     assert.equal(room.economy, true);
   });
 
-  it("lit une position de volet fixe", () => {
+  it("lit une position de volet fixe, et ignore une position inexistante", () => {
     assert.equal(chambre().louver, "4");
+    assert.equal(chambre({ chambre: { 100803: "6" } }).louver, null);
     assert.equal(chambre().fan, "auto");
   });
 
@@ -167,7 +168,9 @@ describe("préparation des commandes", () => {
       { capabilityId: 100804, value: "0" },
       { capabilityId: 100803, value: "2" },
     ]);
-    assert.throws(() => writes(chambre(), "louver", "7"), CommandError);
+    // Le Takao Plus n'a que 4 positions, malgré les 6 du catalogue Atlantic.
+    assert.throws(() => writes(chambre(), "louver", "5"), CommandError);
+    assert.throws(() => writes(chambre(), "louver", "6"), CommandError);
   });
 
   it("active ou coupe pleine puissance et économie", () => {
