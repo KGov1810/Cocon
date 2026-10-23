@@ -19,6 +19,9 @@ import {
   stepSetpoint,
 } from "./logic.js";
 import { createSignin, signOut } from "./session.js";
+import { chip, icon, option } from "./ui.js";
+import { editorView, openEditor, programGroup, programLine, reloadEditor } from "./program-editor.js";
+import { absenceText, absenceView, newAbsenceForm } from "./absence-view.js";
 
 const POLL_MS = 20_000;
 const OPTIMISTIC_MS = 90_000;
@@ -40,33 +43,6 @@ const ADJUSTABLE = new Set(["heat", "cool", "auto", "dry"]);
 
 const $ = (id) => document.getElementById(id);
 
-/* ---------- Icônes (tracés simples, dessinés pour Cocon) ---------- */
-
-const SVG_NS = "http://www.w3.org/2000/svg";
-const ICONS = {
-  minus: "M5 12h14",
-  plus: "M12 5v14M5 12h14",
-  power: "M12 3v8M7.1 6.3a7.5 7.5 0 1 0 9.8 0",
-  refresh: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
-  more: "M5 12h.01M12 12h.01M19 12h.01",
-  sliders: "M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4",
-};
-
-function icon(name) {
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS(SVG_NS, "path");
-  path.setAttribute("d", ICONS[name]);
-  path.setAttribute("fill", "none");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-width", name === "more" ? "3.2" : "2");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  svg.append(path);
-  return svg;
-}
-
 /* ---------- État ---------- */
 
 const state = {
@@ -81,6 +57,11 @@ const state = {
   drafts: new Map(), // id → minuterie de la consigne en cours de réglage
   confirmMode: null, // { id, mode } : mode en conflit qui attend une confirmation
   sheetRoom: null, // pièce dont la fiche est ouverte
+  editor: null, // éditeur de programme ouvert dans la fiche (voir program-editor.js)
+  absence: null, // état de l'absence renvoyé par le relais
+  absenceForm: null, // formulaire de la fiche Absence
+  absenceBusy: false,
+  absenceStatus: null, // { kind, text, at }
 };
 
 const roomById = (id) => state.view.find((r) => r.id === id);
@@ -130,6 +111,7 @@ async function refresh() {
   try {
     const data = await api("GET", "/api/state");
     state.raw = data.rooms;
+    state.absence = data.absence;
     state.updatedAt = data.updatedAt;
     state.error = null;
     for (const room of data.rooms) rememberMode(room.id, room.mode);
@@ -146,8 +128,9 @@ async function refresh() {
   }
 }
 
+/** Envoie une commande ; renvoie true si Atlantic l'a acceptée (confirmée ou en attente). */
 async function send(room, setting, value, patch) {
-  if (state.busy.has(room.id)) return;
+  if (state.busy.has(room.id)) return false;
   state.busy.add(room.id);
   state.confirmMode = null;
   if (patch) setOptimistic(room.id, patch);
@@ -158,11 +141,16 @@ async function send(room, setting, value, patch) {
     const result = await api("POST", `/api/rooms/${room.id}`, { setting, value });
     setStatus(room.id, result.status === "confirmed" ? "ok" : "pending", describeOutcome(result));
     setTimeout(refresh, result.status === "confirmed" ? 1500 : 8000);
+    return true;
   } catch (err) {
-    if (err.status === 401) return showSignin(err.message);
+    if (err.status === 401) {
+      showSignin(err.message);
+      return false;
+    }
     dropOptimistic(room.id, patch);
     setStatus(room.id, "error", err.message);
     refresh();
+    return false;
   } finally {
     state.busy.delete(room.id);
     render();
@@ -224,6 +212,7 @@ function createPane(id) {
   const stateLabel = el("p", { class: "pane__state" });
   const setpoint = el("p", { class: "setpoint" });
   const measured = el("p", { class: "measured" });
+  const programInfo = el("p", { class: "pane__program" });
   const note = el("p", { class: "pane__note" });
 
   const minus = el("button", { class: "round", type: "button", onclick: () => nudge(id, -1) }, icon("minus"));
@@ -241,7 +230,7 @@ function createPane(id) {
 
   const node = el("section", { class: "pane", "aria-labelledby": `room-${id}` }, [
     el("div", { class: "pane__head" }, [name, stateLabel]),
-    el("div", { class: "pane__body" }, [setpoint, measured, note]),
+    el("div", { class: "pane__body" }, [setpoint, measured, programInfo, note]),
     el("div", {}, [
       el("div", { class: "pane__controls" }, [minus, plus, off, on, el("span", { class: "spacer" }), settings]),
       status,
@@ -271,6 +260,10 @@ function createPane(id) {
     setpoint.toggleAttribute("data-draft", state.drafts.has(id));
     if (room.mode === "fan" || room.setpoint === null) setpoint.removeAttribute("aria-label");
     else setpoint.setAttribute("aria-label", `Consigne ${formatTemperature(room.setpoint).replace("°", " degrés")}`);
+
+    const line = room.available ? programLine(room) : null;
+    programInfo.hidden = !line;
+    programInfo.textContent = line ?? "";
 
     const conflict = active ? conflictWith(state.view, id, room.mode) : null;
     note.hidden = !conflict;
@@ -318,40 +311,6 @@ function createPane(id) {
 
 const sheet = $("sheet");
 
-function chip(label, { pressed, disabled, onclick, confirm }) {
-  return el(
-    "button",
-    {
-      class: "chip",
-      type: "button",
-      "aria-pressed": pressed ? "true" : "false",
-      "data-confirm": confirm || null,
-      disabled,
-      onclick,
-    },
-    label,
-  );
-}
-
-function option(label, help, checked, disabled, onclick) {
-  const id = `option-${label.replace(/\W+/g, "-")}`;
-  return el("div", { class: "option" }, [
-    el("div", { class: "option__text" }, [
-      el("span", { class: "option__label", id }, label),
-      el("span", { class: "option__help" }, help),
-    ]),
-    el("button", {
-      class: "switch",
-      type: "button",
-      role: "switch",
-      "aria-checked": checked ? "true" : "false",
-      "aria-labelledby": id,
-      disabled,
-      onclick,
-    }),
-  ]);
-}
-
 let sheetSignature = null;
 
 function renderSheet() {
@@ -363,9 +322,46 @@ function renderSheet() {
 
   // On ne reconstruit la fiche que si son contenu change (le rafraîchissement
   // toutes les 20 s ne doit pas voler un appui en cours).
-  const signature = JSON.stringify([room, busy, current, state.confirmMode, state.view.map((r) => r.mode)]);
+  const signature = JSON.stringify([room, busy, current, state.confirmMode, state.editor, state.view.map((r) => r.mode)]);
   if (signature === sheetSignature && sheet.childElementCount) return;
   sheetSignature = signature;
+
+  // L'encadré d'alerte remplace le message de confirmation dans la fiche.
+  const visible =
+    current &&
+    current.kind !== "confirm" &&
+    (current.kind === "sending" || current.kind === "draft" || Date.now() - current.at < STATUS_VISIBLE_MS);
+  const status = el("p", { class: "sheet__status", "aria-live": "polite", "data-kind": visible ? current.kind : "" }, [
+    visible && (current.kind === "sending" || current.kind === "draft")
+      ? el("span", { class: "spinner", "aria-hidden": "true" })
+      : null,
+    visible ? current.text : room.available ? `${MODE_LABEL[room.mode]}, ${room.temperature !== null ? `il fait ${formatTemperature(room.temperature)}` : "température indisponible"}` : "Unité hors ligne : réglages indisponibles.",
+  ]);
+
+  if (state.editor?.roomId === id && room.program) {
+    const view = editorView(room, state.editor, {
+      busy,
+      status,
+      onChange: (patch, reload) => {
+        state.editor = reload ? reloadEditor(room, state.editor, patch) : { ...state.editor, ...patch };
+        renderSheet();
+      },
+      onSave: async (value) => {
+        if (await send(room, "schedule", value)) state.editor = { ...state.editor, dirty: false };
+        render();
+      },
+      onCancel: () => {
+        state.editor = reloadEditor(room, state.editor);
+        renderSheet();
+      },
+      onBack: () => {
+        state.editor = null;
+        renderSheet();
+      },
+    });
+    sheet.replaceChildren(view.head, el("div", { class: "sheet__body" }, view.body));
+    return;
+  }
 
   const groups = [];
 
@@ -422,6 +418,19 @@ function renderSheet() {
           `De ${formatTemperature(room.setpointRange.min)} à ${formatTemperature(room.setpointRange.max)}, par pas de ${formatTemperature(room.setpointRange.step)}`,
         ),
       ]),
+    );
+  }
+
+  if (room.program) {
+    groups.push(
+      programGroup(room, {
+        busy,
+        onToggle: (follow) => send(room, "program", follow),
+        onEdit: () => {
+          state.editor = openEditor(room);
+          renderSheet();
+        },
+      }),
     );
   }
 
@@ -497,18 +506,6 @@ function renderSheet() {
   }
   if (options.length) groups.push(el("section", { class: "group" }, [el("h3", {}, "Options"), ...options]));
 
-  // L'encadré d'alerte remplace le message de confirmation dans la fiche.
-  const visible =
-    current &&
-    current.kind !== "confirm" &&
-    (current.kind === "sending" || current.kind === "draft" || Date.now() - current.at < STATUS_VISIBLE_MS);
-  const status = el("p", { class: "sheet__status", "aria-live": "polite", "data-kind": visible ? current.kind : "" }, [
-    visible && (current.kind === "sending" || current.kind === "draft")
-      ? el("span", { class: "spinner", "aria-hidden": "true" })
-      : null,
-    visible ? current.text : room.available ? `${MODE_LABEL[room.mode]}, ${room.temperature !== null ? `il fait ${formatTemperature(room.temperature)}` : "température indisponible"}` : "Unité hors ligne : réglages indisponibles.",
-  ]);
-
   sheet.replaceChildren(
     el("div", { class: "sheet__head" }, [
       el("h2", { id: "sheet-title" }, room.name),
@@ -530,13 +527,64 @@ function openSheet(id) {
 sheet.addEventListener("close", () => {
   state.sheetRoom = null;
   state.confirmMode = null;
+  state.editor = null;
 });
 
 // Toucher le fond assombri ferme la fiche.
-for (const dialog of [sheet, $("more")]) {
+for (const dialog of [sheet, $("more"), $("absence")]) {
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });
+}
+
+/* ---------- Absence ---------- */
+
+const absenceDialog = $("absence");
+
+function renderAbsence() {
+  const s = state.absenceStatus;
+  const status = el("p", { class: "sheet__status", "aria-live": "polite", "data-kind": s?.kind ?? "" }, [
+    s?.kind === "sending" ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
+    s?.text ?? "",
+  ]);
+  const view = absenceView(state.absence, state.absenceForm, {
+    busy: state.absenceBusy,
+    status,
+    onChange: (patch) => {
+      state.absenceForm = { ...state.absenceForm, ...patch };
+      renderAbsence();
+    },
+    onSubmit: (window) => sendAbsence(window),
+    onCancelAbsence: () => sendAbsence(null),
+    onClose: () => absenceDialog.close(),
+  });
+  absenceDialog.replaceChildren(view.head, el("div", { class: "sheet__body" }, view.body));
+}
+
+function openAbsence() {
+  if ($("more").open) $("more").close();
+  state.absenceForm = newAbsenceForm();
+  state.absenceStatus = null;
+  renderAbsence();
+  absenceDialog.showModal();
+}
+
+/** Programme (fenêtre en secondes) ou annule (null) l'absence. */
+async function sendAbsence(window) {
+  state.absenceBusy = true;
+  state.absenceStatus = { kind: "sending", text: "Envoi à Atlantic…" };
+  renderAbsence();
+  try {
+    const result = window ? await api("POST", "/api/absence", window) : await api("DELETE", "/api/absence");
+    state.absenceStatus = { kind: result.status === "confirmed" ? "ok" : "pending", text: describeOutcome(result) };
+    setTimeout(refresh, 1500);
+  } catch (err) {
+    if (err.status === 401) return showSignin(err.message);
+    state.absenceStatus = { kind: "error", text: err.message };
+  } finally {
+    state.absenceBusy = false;
+    if (absenceDialog.open) renderAbsence();
+  }
 }
 
 /* ---------- Rendu ---------- */
@@ -545,6 +593,12 @@ function render() {
   const merged = applyOptimistic(state.raw, state.optimistic, Date.now());
   state.optimistic = merged.optimistic;
   state.view = merged.rooms;
+
+  // Éditeur sans modification en cours : il suit l'état reçu d'Atlantic.
+  if (state.editor && !state.editor.dirty) {
+    const room = roomById(state.editor.roomId);
+    state.editor = room?.program ? reloadEditor(room, state.editor) : null;
+  }
 
   const container = $("rooms");
   if (state.updatedAt === null) {
@@ -566,6 +620,12 @@ function render() {
       container.replaceChildren(...nodes);
     }
   }
+
+  const absence = absenceText(state.absence);
+  $("absence-banner").hidden = !absence;
+  $("absence-text").textContent = absence ?? "";
+  // La fiche Absence suit l'état reçu, sauf pendant une saisie.
+  if (absenceDialog.open && !state.absenceBusy && !absenceDialog.contains(document.activeElement)) renderAbsence();
 
   $("banner").hidden = !state.error;
   $("banner").textContent = state.error ?? "";
@@ -595,6 +655,7 @@ function showSignin(message) {
   clearInterval(pollTimer);
   if (sheet.open) sheet.close();
   if ($("more").open) $("more").close();
+  if (absenceDialog.open) absenceDialog.close();
   $("app").hidden = true;
   signin.show(message);
 }
@@ -620,6 +681,8 @@ $("refresh").addEventListener("click", refresh);
 $("open-more").append(icon("more"));
 $("open-more").addEventListener("click", () => $("more").showModal());
 $("more").querySelector("[data-close]").addEventListener("click", () => $("more").close());
+$("open-absence").addEventListener("click", openAbsence);
+$("absence-edit").addEventListener("click", openAbsence);
 $("signout").addEventListener("click", async () => {
   try {
     await signOut();

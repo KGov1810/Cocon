@@ -502,6 +502,148 @@ dialog.sheet::backdrop {
   background: color-mix(in srgb, var(--warn) 12%, var(--surface));
 }
 
+/* --- Programme --- */
+
+.pane__program {
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 550;
+}
+
+.program__edit,
+.program__add {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.program__add svg {
+  width: 20px;
+  height: 20px;
+}
+
+.chips--days {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.chips--days .chip {
+  padding: 0 4px;
+  font-size: 15px;
+}
+
+.slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.slot:first-child {
+  border-top: 0;
+}
+
+.time {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 650;
+}
+
+.time__part {
+  appearance: none;
+  font: 650 18px/1 var(--font); /* 16 px minimum : sinon iOS zoome */
+  font-variant-numeric: tabular-nums;
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--lichen);
+  color: var(--ink);
+  text-align: center;
+}
+
+.slot__stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.round--small {
+  width: 40px;
+  height: 40px;
+}
+
+.round--small svg {
+  width: 20px;
+  height: 20px;
+}
+
+.slot__value {
+  min-width: 2.6em;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 720;
+  font-stretch: 80%;
+}
+
+.slot__off {
+  justify-self: center;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.slot__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.slot__actions .chip {
+  min-height: 40px;
+  font-size: 14px;
+  padding: 0 8px;
+}
+
+@media (max-width: 400px) {
+  .slot {
+    grid-template-columns: auto 1fr;
+  }
+  .slot__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+/* --- Absence --- */
+
+.absence-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 550;
+  background: var(--surface-2);
+}
+
+.absence-banner p {
+  flex: 1;
+}
+
+.field input[type="datetime-local"] {
+  min-height: 48px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pane,
   .setpoint,

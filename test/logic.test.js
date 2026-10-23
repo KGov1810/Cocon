@@ -5,10 +5,15 @@ import assert from "node:assert/strict";
 import {
   applyOptimistic,
   conflictWith,
+  daysFor,
+  describeAbsence,
+  describeNext,
   describeOutcome,
+  formatClock,
   formatTemperature,
   powerOnMode,
   stepSetpoint,
+  validateDraft,
 } from "../public/assets/logic.js";
 
 const room = (overrides = {}) => ({
@@ -117,5 +122,81 @@ describe("valeurs affichées avant confirmation", () => {
     const original = room({ setpoint: 21 });
     applyOptimistic([original], new Map([[1, { setpoint: { value: 23, until: 10_000 } }]]), 0);
     assert.equal(original.setpoint, 21);
+  });
+});
+
+/* ---------- Phase 3 : programme et absence ---------- */
+
+
+describe("programme : affichage", () => {
+  it("écrit une heure au format 24 h", () => {
+    assert.equal(formatClock(360), "06:00");
+    assert.equal(formatClock(1335), "22:15");
+  });
+
+  it("décrit le prochain changement, aujourd'hui, demain ou un autre jour", () => {
+    assert.equal(describeNext({ day: 2, minutes: 1320, setpoint: 19, off: false }, 2), "19° à 22:00");
+    assert.equal(describeNext({ day: 3, minutes: 360, setpoint: 20, off: false }, 2), "20° demain à 06:00");
+    assert.equal(describeNext({ day: 0, minutes: 360, setpoint: 20, off: false }, 2), "20° lundi à 06:00");
+    assert.equal(describeNext({ day: 2, minutes: 1380, setpoint: null, off: true }, 2), "arrêt à 23:00");
+    assert.equal(describeNext({ day: 6, minutes: 0, setpoint: null, off: true }, 5), "arrêt demain à 00:00");
+  });
+
+  it("donne les jours visés par « appliquer à »", () => {
+    assert.deepEqual(daysFor("day", 3), [3]);
+    assert.deepEqual(daysFor("weekdays", 6), [0, 1, 2, 3, 4]);
+    assert.deepEqual(daysFor("weekend", 0), [5, 6]);
+    assert.deepEqual(daysFor("week", 2), [0, 1, 2, 3, 4, 5, 6]);
+  });
+});
+
+describe("programme : vérification avant envoi", () => {
+  const limits = { step: 15, minGap: 60, maxPerDay: 8, minPerWeek: 1 };
+  const slot = (minutes, setpoint = 20) => ({ minutes, setpoint, off: false });
+
+  it("accepte un jour valide", () => {
+    assert.equal(validateDraft([slot(360), slot(1320, 19)], limits, 0), null);
+  });
+
+  it("refuse deux changements à moins d'une heure d'écart", () => {
+    assert.match(validateDraft([slot(360), slot(390)], limits, 0), /au moins 60 min/);
+  });
+
+  it("refuse deux changements à la même heure", () => {
+    assert.match(validateDraft([slot(360), slot(360)], limits, 0), /au moins 60 min/);
+  });
+
+  it("refuse plus de changements que l'unité n'en accepte", () => {
+    const many = Array.from({ length: 9 }, (_, i) => slot(i * 120));
+    assert.match(validateDraft(many, limits, 0), /Au plus 8/);
+  });
+
+  it("refuse une semaine sans aucun changement", () => {
+    assert.match(validateDraft([], limits, 0), /au moins un changement/);
+    assert.equal(validateDraft([], limits, 2), null);
+  });
+});
+
+describe("absence : affichage", () => {
+  // 30 octobre 2026, 18 h 00, heure de Paris.
+  const end = Date.UTC(2026, 9, 30, 17, 0) / 1000;
+  const start = Date.UTC(2026, 9, 24, 7, 30) / 1000;
+
+  it("décrit une absence en cours", () => {
+    assert.equal(
+      describeAbsence({ status: "on", start, end }, "Europe/Paris"),
+      "Absence en cours jusqu'au ven. 30 oct. à 18:00",
+    );
+  });
+
+  it("décrit une absence programmée", () => {
+    assert.equal(
+      describeAbsence({ status: "scheduled", start, end }, "Europe/Paris"),
+      "Absence programmée du sam. 24 oct. à 09:30 au ven. 30 oct. à 18:00",
+    );
+  });
+
+  it("ne dit rien sans absence", () => {
+    assert.equal(describeAbsence({ status: "off", start: null, end: null }, "Europe/Paris"), null);
   });
 });

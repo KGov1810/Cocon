@@ -82,3 +82,70 @@ export function applyOptimistic(rooms, optimistic, now) {
   });
   return { rooms: merged, optimistic: kept };
 }
+
+/* ---------- Programme hebdomadaire ---------- */
+
+const DAY_NAMES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+
+/** 390 → « 06:30 ». */
+export function formatClock(minutes) {
+  const h = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const m = String(minutes % 60).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+/**
+ * Prochain changement du programme, en clair.
+ * @param {{ day: number, minutes: number, setpoint: number | null, off: boolean }} next
+ * @param {number} today  0 = lundi
+ */
+export function describeNext(next, today) {
+  const what = next.off ? "arrêt" : formatTemperature(next.setpoint);
+  let when = "";
+  if (next.day === (today + 1) % 7) when = "demain ";
+  else if (next.day !== today) when = `${DAY_NAMES[next.day]} `;
+  return `${what} ${when}à ${formatClock(next.minutes)}`;
+}
+
+/** Jours visés par « appliquer à » (0 = lundi). */
+export function daysFor(applyTo, day) {
+  if (applyTo === "weekdays") return [0, 1, 2, 3, 4];
+  if (applyTo === "weekend") return [5, 6];
+  if (applyTo === "week") return [0, 1, 2, 3, 4, 5, 6];
+  return [day];
+}
+
+/**
+ * Vérifie un jour de programme avant l'envoi (mêmes règles que le relais).
+ * @param {number} otherSlots  créneaux des jours non modifiés
+ * @returns {string | null} message d'erreur, ou null si le jour est valide
+ */
+export function validateDraft(slots, limits, otherSlots) {
+  if (slots.length > limits.maxPerDay) return `Au plus ${limits.maxPerDay} changements par jour.`;
+  const sorted = [...slots].sort((a, b) => a.minutes - b.minutes);
+  for (let i = 1; i < sorted.length; i += 1) {
+    if (sorted[i].minutes - sorted[i - 1].minutes < limits.minGap) {
+      return `Il faut au moins ${limits.minGap} min entre deux changements.`;
+    }
+  }
+  if (slots.length + otherSlots < limits.minPerWeek) {
+    return "Le programme doit garder au moins un changement dans la semaine.";
+  }
+  return null;
+}
+
+/* ---------- Absence ---------- */
+
+function formatMoment(seconds, timeZone) {
+  const date = new Date(seconds * 1000);
+  const day = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone });
+  const time = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone });
+  return `${day.format(date)} à ${time.format(date)}`;
+}
+
+/** Phrase du bandeau d'absence ; null s'il n'y a pas d'absence. */
+export function describeAbsence(absence, timeZone) {
+  if (!absence || absence.status === "off" || !absence.end) return null;
+  if (absence.status === "on") return `Absence en cours jusqu'au ${formatMoment(absence.end, timeZone)}`;
+  return `Absence programmée du ${formatMoment(absence.start, timeZone)} au ${formatMoment(absence.end, timeZone)}`;
+}

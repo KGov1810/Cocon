@@ -10,6 +10,13 @@
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#e8ecea" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d141a" />
     <meta name="robots" content="noindex" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/assets/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/assets/icons/icon-180.png" />
+    <meta name="apple-mobile-web-app-title" content="Cocon" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Cocon</title>
     <link rel="preload" href="/assets/fonts/bricolage-grotesque.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/assets/styles.css" />
@@ -31,6 +38,11 @@
 
       <p id="banner" class="banner" role="alert" hidden></p>
 
+      <div id="absence-banner" class="absence-banner" hidden>
+        <p id="absence-text"></p>
+        <button id="absence-edit" class="button button--quiet" type="button">Modifier</button>
+      </div>
+
       <main id="rooms" class="rooms">
         <div id="loading" class="loading-rooms">
           <span class="spinner" aria-hidden="true"></span>
@@ -42,6 +54,9 @@
     <!-- Réglages d'une pièce : rempli par app.js -->
     <dialog id="sheet" class="sheet" aria-labelledby="sheet-title"></dialog>
 
+    <!-- Absence (toute la maison) : rempli par app.js -->
+    <dialog id="absence" class="sheet" aria-labelledby="absence-title"></dialog>
+
     <!-- Options du compte -->
     <dialog id="more" class="sheet sheet--small" aria-labelledby="more-title">
       <div class="sheet__head">
@@ -51,6 +66,7 @@
       </div>
       <div class="sheet__body">
         <p id="who" class="muted"></p>
+        <button id="open-absence" class="button button--primary" type="button">Absence</button>
         <a class="button" href="/diagnostic">Ouvrir le diagnostic</a>
         <button id="signout" class="button" type="button">Se déconnecter</button>
       </div>
