@@ -11,7 +11,21 @@
 
 import { AtlanticError, createAtlanticClient } from "./atlantic.js";
 import { clearedSessionCookie, identify, matchKey, sessionCookie } from "./auth.js";
+import { readState, runCommand } from "./commands.js";
 import { buildDiagnostic } from "./diagnostic.js";
+import { CommandError } from "./rooms.js";
+
+/** Code HTTP renvoyé pour chaque refus de commande. */
+const COMMAND_ERROR_STATUS = {
+  ROOM_NOT_FOUND: 404,
+  COMMAND_REFUSED: 502,
+  COMMAND_FAILED: 502,
+};
+
+/** /api/rooms/<identifiant numérique de la pièce> */
+const ROOM_ROUTE = /^\/api\/rooms\/(\d{1,12})$/;
+
+const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Taille maximale d'un corps de requête accepté (la connexion n'a besoin que de la clé). */
 const MAX_BODY_BYTES = 1024;
@@ -112,6 +126,30 @@ export async function handleApi(request, env, deps = {}) {
 
     if (route === "GET /api/me") return json({ name: who.name });
 
+    const now = deps.now ?? Date.now;
+
+    if (route === "GET /api/state") {
+      const client = createAtlanticClient(env, deps);
+      return json(await readState(client, env, now));
+    }
+
+    const roomMatch = request.method === "POST" && url.pathname.match(ROOM_ROUTE);
+    if (roomMatch) {
+      const body = await readSmallJson(request);
+      if (typeof body?.setting !== "string") {
+        return apiError(400, "BAD_REQUEST", "Commande invalide.");
+      }
+      const client = createAtlanticClient(env, deps);
+      const result = await runCommand(
+        client,
+        env,
+        { roomId: Number(roomMatch[1]), setting: body.setting, value: body.value },
+        { now, sleep: deps.sleep ?? defaultSleep },
+      );
+      console.log("Commande", who.name, roomMatch[1], body.setting, result.status, `${result.elapsedMs} ms`);
+      return json(result, result.status === "confirmed" ? 200 : 202);
+    }
+
     if (route === "GET /api/diagnostic") {
       const client = createAtlanticClient(env, deps);
       return json(await buildDiagnostic(client, deps.now));
@@ -119,6 +157,9 @@ export async function handleApi(request, env, deps = {}) {
 
     return apiError(404, "NOT_FOUND", "Route inconnue.");
   } catch (err) {
+    if (err instanceof CommandError) {
+      return apiError(COMMAND_ERROR_STATUS[err.code] ?? 422, err.code, err.message);
+    }
     if (err instanceof AtlanticError) return fromAtlanticError(err);
     console.error("Erreur inattendue", err?.name, err?.message);
     return apiError(500, "INTERNAL", "Erreur interne du relais.");

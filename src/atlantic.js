@@ -158,14 +158,20 @@ export function createAtlanticClient(env, deps = {}) {
   }
 
   /**
-   * GET authentifié. Si Atlantic rejette le jeton (401), on se reconnecte
-   * une seule fois puis on réessaie.
+   * Requête authentifiée (GET, ou POST JSON si `json` est fourni). Si Atlantic
+   * rejette le jeton (401), on se reconnecte une seule fois puis on réessaie.
+   * @returns {Promise<{ status: number, body: unknown }>}
    */
-  async function getJson(label, path) {
+  async function authed(label, path, json) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const bearer = await token({ force: attempt > 0 });
       const response = await timedFetch(label, `${base}${path}`, {
-        headers: { Authorization: `Bearer ${bearer}` },
+        method: json === undefined ? "GET" : "POST",
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          ...(json === undefined ? {} : { "Content-Type": "application/json" }),
+        },
+        body: json === undefined ? undefined : JSON.stringify(json),
       });
       checkRateLimit(response);
       if (response.status === 401) {
@@ -188,7 +194,7 @@ export function createAtlanticClient(env, deps = {}) {
 
     /** Vue complète du logement : unités, pièces et leurs capacités. */
     async getSetup() {
-      const { status, body } = await getJson("logement", "/magellan/cozytouch/setupviewv2");
+      const { status, body } = await authed("logement", "/magellan/cozytouch/setupviewv2");
       if (status !== 200 || !Array.isArray(body) || body.length === 0) {
         throw new AtlanticError(
           "UPSTREAM",
@@ -201,16 +207,41 @@ export function createAtlanticClient(env, deps = {}) {
 
     /** Catalogue des capacités (nom, type, bornes) publié par Atlantic. */
     async getCapabilityCatalogue() {
-      const { status, body } = await getJson("catalogue", "/magellan/productmodels/capabilities");
+      const { status, body } = await authed("catalogue", "/magellan/productmodels/capabilities");
       return status === 200 && Array.isArray(body) ? body : [];
     },
 
     /** Consommation journalière du logement ; la réponse brute est renvoyée. */
     async getDailyConsumption(setupId) {
-      return getJson(
+      return authed(
         "consommation",
         `/magellan/setups/${encodeURIComponent(setupId)}/consumptions?periodicity=daily`,
       );
+    },
+
+    /**
+     * Demande l'écriture d'une capacité. Atlantic répond 201 avec l'identifiant
+     * de l'« exécution », dont on suit ensuite l'avancement.
+     * @returns {Promise<{ status: number, executionId: string | null }>}
+     */
+    async writeCapability(deviceId, capabilityId, value) {
+      const { status, body } = await authed("écriture", "/magellan/executions/writecapability", {
+        capabilityId,
+        deviceId,
+        value,
+      });
+      const id = typeof body === "number" || typeof body === "string" ? String(body) : null;
+      return { status, executionId: status === 201 && id && /^\d+$/.test(id) ? id : null };
+    },
+
+    /**
+     * État d'une exécution : 1 en attente, 2 en cours, 3 terminée, autre = échec.
+     * @returns {Promise<number | null>} null si la réponse est illisible
+     */
+    async getExecutionState(executionId) {
+      const { status, body } = await authed("suivi", `/magellan/executions/${executionId}`);
+      const state = status === 200 ? Number(body?.state) : Number.NaN;
+      return Number.isInteger(state) ? state : null;
     },
   };
 }
