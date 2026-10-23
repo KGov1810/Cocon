@@ -108,10 +108,17 @@ export async function buildDiagnostic(client, now = Date.now) {
       return {
         ...redact(rest),
         capabilities: capabilities
-          .map((capability) => ({
-            ...redact(capability),
-            label: labelOf(catalogue[capability.capabilityId]),
-          }))
+          .map((capability) => {
+            const label = labelOf(catalogue[capability.capabilityId]);
+            // Le nom sensible est celui de la capacité, pas celui du champ
+            // (ex. DEVICE_ZigbeeMacAdress) : on masque alors sa valeur.
+            const sensitive = label !== null && SENSITIVE_KEY.test(label) && capability.value !== null;
+            return {
+              ...redact(capability),
+              ...(sensitive ? { value: "[masqué]" } : {}),
+              label,
+            };
+          })
           .sort((a, b) => a.capabilityId - b.capabilityId),
       };
     }),

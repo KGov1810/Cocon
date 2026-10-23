@@ -35,6 +35,7 @@ const SETUP = [
         capabilities: [
           { capabilityId: 7, value: "4" },
           { capabilityId: 164, value: "0" },
+          { capabilityId: 100044, value: "[4,59,40,254]" },
         ],
       },
     ],
@@ -65,6 +66,7 @@ const defaultRoutes = () => ({
     [
       { id: 7, name: "HVAC mode" },
       { id: 999, name: "Inutilisée" },
+      { id: 100044, name: "DEVICE_ZigbeeMacAdress" },
     ],
   ],
   "/magellan/setups/4242/consumptions": () => [200, []],
@@ -184,7 +186,7 @@ describe("diagnostic", () => {
     assert.equal(report.account.rateLimit, 30);
     assert.equal(report.devices.length, 1);
     assert.equal(report.devices[0].capabilities[0].label, "HVAC mode");
-    assert.deepEqual(Object.keys(report.catalogue), ["7"]);
+    assert.deepEqual(Object.keys(report.catalogue), ["7", "100044"]);
     assert.equal(report.consumption.declared, false);
     assert.equal(report.consumption.available, false);
 
@@ -198,7 +200,7 @@ describe("diagnostic", () => {
     const { fetchImpl } = fakeAtlantic(defaultRoutes());
     const res = await handleApi(get("/api/diagnostic"), ENV, { fetchImpl });
     const text = await res.text();
-    for (const secret of ["1 rue Secrète", "SN-123", "Ville-Secrète"]) {
+    for (const secret of ["1 rue Secrète", "SN-123", "Ville-Secrète", "[4,59,40,254]"]) {
       assert.ok(!text.includes(secret), `donnée non masquée : ${secret}`);
     }
     assert.ok(text.includes("[masqué]"));
