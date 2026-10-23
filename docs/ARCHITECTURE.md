@@ -11,7 +11,10 @@ iPhone (appli web Cocon)  →  Worker Cloudflare « cocon »  →  Cloud Atlanti
 | --- | --- | --- |
 | Application web (PWA) | Interface en français, clair/sombre, installée depuis Safari. Ne connaît que la clé d'accès de la personne. | `public/` |
 | Relais (Worker Cloudflare) | Vérifie la clé d'accès, se connecte à Atlantic avec les secrets, appelle l'API, renvoie des erreurs compréhensibles. Sert aussi les fichiers de l'application. | `src/worker.js`, `src/auth.js` |
-| Client Atlantic | Seul endroit qui connaît l'API Magellan : connexion, jeton en cache, reconnexion sur 401, gestion du quota (429) et des délais. | `src/atlantic.js` |
+| Client Atlantic | Seul endroit qui connaît l'API Magellan : connexion, jeton en cache, reconnexion sur 401, gestion du quota (429) et des délais, écriture d'une capacité et suivi de son exécution. | `src/atlantic.js` |
+| Modèle des pièces | Traduit la vue brute d'Atlantic en pièces (mode, consignes et bornes, température valide, ventilation, volets, options), et valide chaque commande avant de la traduire en écritures de capacités. | `src/rooms.js` |
+| Commandes | Lit l'état (avec un cache de 60 s pour les commandes), exécute les écritures dans l'ordre et suit leur confirmation. | `src/commands.js` |
+| Tableau de bord | Panneaux Chambre / Salon colorés selon l'état, fiche de réglages par pièce, suivi des commandes. | `public/index.html`, `public/assets/app.*`, `public/assets/logic.js` |
 | Diagnostic | Lecture seule de tout ce que le compte expose, données sensibles masquées. | `src/diagnostic.js`, `public/diagnostic.html` |
 
 ## Choix techniques
@@ -25,7 +28,8 @@ ont un iPhone.
 
 **HTML, CSS et JavaScript simples, sans framework ni compilation.**
 Le code publié est exactement le code du dépôt. Moins de dépendances, moins de mises à
-jour forcées, et rien à « construire » avant de publier.
+jour forcées, et rien à « construire » avant de publier. La police (Bricolage
+Grotesque, licence OFL) est hébergée avec l'application : aucune ressource externe.
 
 **Un relais Cloudflare (offre gratuite).**
 Il est indispensable pour trois raisons :
@@ -51,6 +55,32 @@ L'API lit et écrit le programme hebdomadaire de chaque unité. Il s'exécute m�
 le téléphone ou Cloudflare sont indisponibles : aucun serveur de tâches planifiées
 n'est nécessaire.
 
+## Déroulement d'une commande
+
+```
+Téléphone                    Relais                               Atlantic
+   │ POST /api/rooms/1001        │                                     │
+   │ { setting, value } ───────▶ │ lit l'état (cache ≤ 60 s)           │
+   │                             │ planCommand : valide, traduit       │
+   │                             │ POST executions/writecapability ──▶ │ → n° d'exécution
+   │                             │ GET executions/<n> (≈ 9 s max) ───▶ │ 1 attente, 2 en cours, 3 terminé
+   │ ◀── 200 confirmé / 202 en attente / 4xx-5xx refus                 │
+   │ affiche la valeur demandée jusqu'à ce qu'Atlantic la renvoie (90 s max)
+```
+
+- **Une commande à la fois par pièce.** Les boutons de la pièce sont désactivés
+  pendant l'envoi.
+- **Consigne** : la valeur s'affiche dès l'appui sur + ou −, puis part 1,2 s après
+  le dernier appui. Plusieurs appuis ne font donc qu'un seul envoi.
+- **Programme actif** : la commande passe d'abord en dérogation (capacité 157),
+  sinon le programme reprendrait la main.
+- **Multi-split** : passer en chaud pendant que l'autre pièce refroidit, ou
+  l'inverse, demande un second appui de confirmation.
+- **État** : relu toutes les 20 s quand l'appli est au premier plan, 1,5 s après une
+  confirmation et 8 s après une commande restée en attente. Cela représente environ
+  3 lectures par minute et par téléphone, plus 2 à 7 requêtes par commande. Le
+  quota Atlantic est de 30 requêtes par minute, partagé avec l'appli officielle.
+
 ## Sécurité
 
 - Secrets Cloudflare : `COZYTOUCH_EMAIL`, `COZYTOUCH_PASSWORD`, `COZYTOUCH_CLIENT_ID`,
@@ -68,6 +98,12 @@ n'est nécessaire.
 - Page : CSP stricte (`script-src 'self'`, `style-src 'self'`, sans code en ligne),
   HSTS, `frame-ancestors 'none'`, aucune ressource externe. Les données d'Atlantic
   sont insérées comme texte, jamais comme HTML.
+- Commandes : la pièce doit exister dans le logement et être une pièce climatisée
+  (le hub est refusé). Le réglage doit faire partie d'une liste fermée et la valeur
+  doit être autorisée par l'unité : modes déclarés, bornes et pas de consigne,
+  vitesses déclarées. L'identifiant d'exécution renvoyé par Atlantic doit être
+  numérique avant d'être placé dans une URL. Chaque commande est journalisée dans
+  Cloudflare (personne, pièce, réglage, résultat, durée), sans aucun secret.
 - Réponses de l'API : `Cache-Control: no-store`, aucune autorisation cross-origin.
 - Rapport de diagnostic : numéros de série, adresses, localisation et URL internes
   masqués. Les lectures facultatives (catalogue, consommation) peuvent échouer sans
@@ -90,11 +126,16 @@ n'est nécessaire.
 | Jeton Atlantic expiré | Reconnexion automatique (une fois) | Rien |
 | Quota Atlantic dépassé | 429 `RATE_LIMITED` + délai | « Réessayez dans N s » |
 | Atlantic lent ou injoignable | 504 `TIMEOUT` / 502 `UPSTREAM` | Message explicite |
+| Pièce inconnue (ou le hub) | 404 `ROOM_NOT_FOUND` | Message explicite |
+| Valeur ou réglage refusé par le relais | 422 `INVALID_VALUE`, `INVALID_STATE`, `UNKNOWN_SETTING`, `UNAVAILABLE` | Message explicite, rien n'est envoyé |
+| Écriture rejetée par Atlantic | 502 `COMMAND_REFUSED` | « Atlantic a refusé la commande » |
+| L'unité n'applique pas la commande | 502 `COMMAND_FAILED` | « L'unité n'a pas pu appliquer la commande » |
+| Pas de confirmation dans les 9 s | 202 `pending` | « Envoyé, Atlantic n'a pas encore confirmé » |
 
 ## Phases
 
-1. **Découverte** : relais et page de diagnostic en lecture seule.
+1. **Découverte** : relais et page de diagnostic en lecture seule. *(terminée)*
 2. **Application** : tableau de bord Salon / Chambre, toutes les commandes exposées,
-   suivi de chaque commande (envoyée, confirmée, échec) avec son délai.
-3. **Programmation et finition** : éditeur du programme hebdomadaire, icône et
-   installation PWA, README final.
+   suivi de chaque commande (envoyée, confirmée, échec) avec son délai. *(terminée)*
+3. **Programmation et finition** : éditeur du programme hebdomadaire, mode Absence
+   (toute la maison), icône et installation PWA, README final.

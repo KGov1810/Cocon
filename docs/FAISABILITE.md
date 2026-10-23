@@ -14,26 +14,28 @@ Cozytouch, mêmes droits.
 | Zigbee local (Zigbee2MQTT) | ⏸️ Écartée pour l'instant | Fonctionne (l'interface de chaque Takao est un module Zigbee 3.0 certifié), mais demande une clé Zigbee et un appareil allumé en permanence : incompatible avec l'objectif « 0 € ». |
 | **Cloud Atlantic « Magellan »** | ✅ **Retenue** | C'est l'API qu'utilise l'application Cozytouch pour ce matériel (`apis.groupe-atlantic.com`). Non officielle, mais déjà utilisée par des projets open source (gduteil/cozytouch pour Home Assistant, homey-cozytouch). |
 
-## 2. Fonctions attendues
+## 2. Fonctions réellement exposées (confirmées sur l'installation, octobre 2026)
 
-D'après la cartographie publiée par l'intégration open source pour les climatiseurs
-Takao (établie sur d'autres modèles que le Takao Plus) :
+Lues par la page `/diagnostic` sur les deux unités (`ROOM_0` = Chambre,
+`ROOM_1` = Salon, modèles 557 et 558), derrière le Hub Cozytouch (modèle 1457).
 
-| Fonction | Exposée ? |
-| --- | --- |
-| Marche / arrêt, modes auto, froid, chaud, ventilation, déshumidification | Oui |
-| Température de consigne, température mesurée | Oui |
-| Vitesse de ventilation : basse, moyenne, haute, auto | Oui |
-| Mode silencieux | Oui |
-| Orientation des volets (4 positions) | Oui |
-| Mode absence (pour tout le logement) | Oui |
-| Programme hebdomadaire chauffage / refroidissement (10 plages par jour max., degrés entiers) | Oui |
-| Mode éco | Non |
-| Consommation et coût | Très probablement non (voir §4) |
+| Fonction | Capacité Atlantic | Dans Cocon |
+| --- | --- | --- |
+| Mode : arrêt, auto, froid, chaud, ventilation, déshumidification | 7 (valeurs permises par le masque 166 = 411) | Oui |
+| Consigne chaud (16 à 30 °C) et froid (18 à 30 °C), pas de 0,5 °C | 40, 177 (bornes 160 à 163, pas 294) | Oui |
+| Température mesurée | 117, validité 103150 | Oui (affichée « — » hors 4 à 40 °C, par exemple −50 °C quand l'unité est arrêtée) |
+| Ventilation : basse, moyenne, haute, auto | 100801 (séquence 100800 = 2) | Oui |
+| Silence | 100802 | Oui |
+| Volets : 6 positions fixes ou balayage | 100803, 100804 | Oui (positions 5 et 6 à confirmer sur l'unité) |
+| Pleine puissance | 100505 | Oui |
+| Économie d'énergie | 100507 (activée sur les deux unités) | Oui, marquée expérimentale : absente de l'appli Cozytouch, effet non documenté |
+| Programme hebdomadaire chaud et froid (2 à 8 plages par jour) | 184 (BASIC / PROG), 100320 à 100333, dérogation 157 et 158 | Phase 3 (dérogation déjà gérée) |
+| Absence (toute la maison) | Hub : 152, 172, 222 | Phase 3 |
+| Indicateur « chauffe / refroidit en cours » | 153 | Non : sa valeur ne change jamais sur cette installation |
+| Mode éco du catalogue (préréglage) | — | Absent de l'installation |
 
-> **À confirmer sur l'installation réelle** : Atlantic répond « par produit » et non
-> « par modèle ». La page `/diagnostic` de Cocon (phase 1) liste ce que vos deux unités
-> exposent vraiment ; l'interface ne montrera que ces fonctions.
+> Les capacités déclarées par l'unité sont la seule source : l'interface n'affiche
+> que ce qui existe. Le relais refuse toute valeur hors de ce que l'unité déclare.
 
 ## 3. Réactivité
 
@@ -49,10 +51,11 @@ Conclusions :
 - **L'essentiel du délai vient de la PAC elle-même** (montée en température de
   l'échangeur avant de souffler). Aucune application ne peut le réduire.
 - **Le cloud ajoute 1 à 2 min.** Dans l'API, une commande est une « exécution » qui
-  passe par les états *en attente → en cours → terminée*, et le cloud confirme en
-  quelques secondes. Le délai restant se situe donc probablement entre le cloud et
-  le hub ou l'unité. C'est une hypothèse, que les commandes de la phase 2
-  mesureront (horodatage de chaque étape).
+  passe par les états *en attente → en cours → terminée*. Cocon affiche le temps
+  mis par Atlantic pour confirmer chaque commande. Si la confirmation arrive en
+  quelques secondes alors que l'unité réagit 1 à 2 min plus tard, le délai se situe
+  entre le cloud et le hub ou l'unité, hors de portée d'une application.
+- La lecture complète de l'état prend environ 1,9 s chez Atlantic.
 - **Ce que Cocon améliore réellement** : un retour visuel immédiat (envoi, confirmation
   du cloud, échec), un état rafraîchi plus souvent pendant qu'on regarde l'écran, et
   surtout la **programmation hebdomadaire**, qui met la pièce à température à l'heure
@@ -60,15 +63,10 @@ Conclusions :
 
 ## 4. Consommation et tarifs
 
-La route de consommation existe dans l'API (kWh et coût par jour, heures pleines et
-creuses), mais tout indique qu'elle ne renvoie rien pour cette installation :
-
-- Atlantic exclut les pompes à chaleur air/air du suivi de consommation de son boîtier Cozybox.
-- L'interface Zigbee des Takao ne mesure ni puissance ni énergie.
-- Sur un hub Atlantic pour climatiseurs, l'indicateur « consommation disponible »
-  (capacité 164) vaut 0.
-
-Le diagnostic le vérifie. Sans données, l'écran « Énergie » ne sera pas construit.
+**Confirmé : non disponible.** Aucune unité ne publie la capacité 164
+(consommations suivies), et la route de consommation du logement répond par une
+liste vide. Cela concorde avec Atlantic, qui exclut les pompes à chaleur air/air
+du suivi de consommation. Il n'y a donc pas d'écran « Énergie ».
 
 ## 5. Contraintes et risques
 
