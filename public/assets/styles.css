@@ -1,51 +1,61 @@
 /*
- * Cocon — styles communs.
- * Les couleurs sont des variables (« tokens ») redéfinies pour le mode sombre :
- * on ne code jamais une couleur en dur dans un composant.
+ * Cocon — base commune (tableau de bord et diagnostic).
+ *
+ * Identité : fond « lichen » froid, encre bleu nuit, une seule famille de
+ * caractères (Bricolage Grotesque, hébergée ici). La couleur vive est réservée
+ * à l'état des pièces : braise (chauffe), glacier (froid), violet (auto),
+ * sarcelle (ventilation, déshumidification).
  */
+
+@font-face {
+  font-family: "Bricolage";
+  src: url("/assets/fonts/bricolage-grotesque.woff2") format("woff2-variations");
+  font-weight: 200 800;
+  font-stretch: 75% 100%;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   color-scheme: light dark;
 
-  --bg: #f6f3ee;
-  --surface: #ffffff;
-  --surface-2: #f0ece6;
-  --text: #1d1b18;
-  --text-muted: #6d675e;
-  --border: #e4ded5;
-  --accent: #b5532b;
-  --accent-text: #ffffff;
-  --ok: #2f7d4f;
-  --warn: #a15c07;
-  --danger: #b42318;
+  --lichen: #e8ecea;
+  --surface: #f7f9f8;
+  --surface-2: #dde3e1;
+  --ink: #15212c;
+  --ink-2: #4f5c68;
+  --line: #c9d1ce;
 
-  --radius: 18px;
-  --radius-sm: 10px;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --braise: #c93c17;
+  --glacier: #1d62b0;
+  --violet: #5e43c2;
+  --sarcelle: #0d6e63;
+  --on-color: #fff7f2;
+
+  --ok: #1f6f43;
+  --warn: #8a5300;
+  --danger: #b3261e;
+
+  --radius: 14px;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font: "Bricolage", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121110;
-    --surface: #1c1a18;
-    --surface-2: #26231f;
-    --text: #f3efe8;
-    --text-muted: #a49d92;
-    --border: #312d28;
-    --accent: #e3825a;
-    --accent-text: #1d1b18;
-    --ok: #5cc28a;
-    --warn: #e0a347;
-    --danger: #f27a6e;
-    --shadow: none;
+    --lichen: #0d141a;
+    --surface: #16212a;
+    --surface-2: #213040;
+    --ink: #e9eff2;
+    --ink-2: #9aa8b3;
+    --line: #2a3a48;
+    --ok: #6fd39b;
+    --warn: #f0b45c;
+    --danger: #ff8a80;
   }
 }
 
-/* --- Base (comportement « appli » sur iPhone) --- */
+/* --- Comportement « appli » sur iPhone --- */
 
 *,
 *::before,
@@ -62,9 +72,11 @@ html {
 body {
   margin: 0;
   min-height: 100dvh;
-  background: var(--bg);
-  color: var(--text);
-  font: 16px/1.45 var(--font);
+  background: var(--lichen);
+  color: var(--ink);
+  font: 400 17px/1.4 var(--font);
+  font-optical-sizing: auto;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -72,7 +84,8 @@ h1,
 h2,
 h3 {
   margin: 0;
-  line-height: 1.2;
+  line-height: 1.15;
+  font-weight: 650;
   letter-spacing: -0.01em;
 }
 
@@ -84,6 +97,20 @@ p {
   display: none !important;
 }
 
+a {
+  color: inherit;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+.muted {
+  color: var(--ink-2);
+}
+
+.small {
+  font-size: 15px;
+}
+
 /* --- Mise en page --- */
 
 .page {
@@ -93,49 +120,10 @@ p {
   padding: 16px 16px calc(32px + env(safe-area-inset-bottom, 0px));
 }
 
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(160%) blur(16px);
-  -webkit-backdrop-filter: saturate(160%) blur(16px);
-  border-bottom: 1px solid var(--border);
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-.topbar__inner {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.brand small {
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.brand--large {
-  font-size: 34px;
-}
-
 .page--centered {
   min-height: 100dvh;
   display: grid;
   align-content: center;
-}
-
-.spacer {
-  flex: 1;
 }
 
 .stack {
@@ -148,42 +136,68 @@ p {
 }
 
 .stack--title {
-  gap: 6px;
+  gap: 4px;
 }
 
-/* --- Cartes --- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--lichen);
+  border-bottom: 1px solid var(--line);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.topbar__inner {
+  margin: 0 auto;
+  padding: 10px 16px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* Le nom de l'appli : condensé et serré, comme les chiffres des pièces. */
+.brand {
+  font-size: 24px;
+  font-weight: 750;
+  font-stretch: 80%;
+  letter-spacing: -0.02em;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand--large {
+  font-size: 56px;
+}
+
+/* --- Blocs (diagnostic et connexion) --- */
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 18px;
 }
 
 .card h2 {
-  font-size: 18px;
-}
-
-.muted {
-  color: var(--text-muted);
-}
-
-.small {
-  font-size: 14px;
+  font-size: 19px;
 }
 
 /* --- Boutons --- */
 
 .button {
   appearance: none;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font: 600 16px/1 var(--font);
+  border: 1.5px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font: 600 17px/1 var(--font);
   min-height: 48px;
   padding: 0 18px;
-  border-radius: 14px;
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -195,52 +209,43 @@ p {
   -webkit-user-select: none;
   transition:
     transform 120ms var(--ease-out),
-    background-color 120ms var(--ease-out);
+    background-color 160ms var(--ease-out);
 }
 
 .button:active {
-  transform: scale(0.97);
-  background: var(--surface-2);
+  transform: scale(0.96);
 }
 
 .button--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-.button--primary:active {
-  background: var(--accent);
-  filter: brightness(0.92);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--lichen);
 }
 
 .button--quiet {
   border-color: transparent;
-  background: transparent;
   min-height: 40px;
   padding: 0 12px;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .button[disabled] {
-  opacity: 0.55;
+  opacity: 0.45;
   pointer-events: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .button:hover {
-    background: var(--surface-2);
+    background: color-mix(in srgb, currentColor 8%, transparent);
   }
   .button--primary:hover {
-    background: var(--accent);
-    filter: brightness(1.05);
+    background: var(--ink);
+    filter: brightness(1.15);
   }
 }
 
-.button:focus-visible,
-.field input:focus-visible,
-summary:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--glacier) 70%, transparent);
   outline-offset: 2px;
 }
 
@@ -271,70 +276,67 @@ summary:focus-visible {
   min-height: 48px;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text);
+  border: 1.5px solid var(--line);
+  background: var(--lichen);
+  color: var(--ink);
 }
 
-.mono {
-  font-family: var(--mono);
-  font-size: 14px;
-  word-break: break-all;
+/* Identifiants techniques (clés, numéros de capacités) */
+.code {
+  font-stretch: 85%;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
 }
 
 /* --- Messages --- */
 
 .notice {
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   padding: 12px 14px;
   background: var(--surface-2);
-  border: 1px solid var(--border);
 }
 
 .notice--error {
   color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
-  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
 }
 
 .notice--ok {
   color: var(--ok);
-  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
-  background: color-mix(in srgb, var(--ok) 8%, var(--surface));
+  background: color-mix(in srgb, var(--ok) 10%, var(--surface));
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--surface-2);
-  color: var(--text-muted);
+  color: var(--ink-2);
   white-space: nowrap;
 }
 
 .badge--ok {
   color: var(--ok);
-  background: color-mix(in srgb, var(--ok) 12%, var(--surface));
 }
 
 .badge--warn {
   color: var(--warn);
-  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
 }
 
 /* --- Chargement --- */
 
 .spinner {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
+  border: 2.5px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
   animation: spin 800ms linear infinite;
+  flex: none;
 }
 
 @keyframes spin {

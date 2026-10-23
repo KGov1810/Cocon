@@ -2,27 +2,60 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f3ee" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121110" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#e8ecea" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d141a" />
     <meta name="robots" content="noindex" />
     <title>Cocon</title>
+    <link rel="preload" href="/assets/fonts/bricolage-grotesque.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/app.css" />
   </head>
   <body>
-    <!-- Phase 1 : l'application arrive à la phase 2. Seul le diagnostic est en ligne. -->
-    <main class="page page--centered">
-      <div class="card stack">
-        <h1 class="brand brand--large">Cocon</h1>
-        <p class="muted">
-          L'application est en préparation. En attendant, le diagnostic montre ce que vos
-          climatiseurs exposent réellement.
-        </p>
-        <a class="button button--primary" href="/diagnostic">
-          Ouvrir le diagnostic
-        </a>
+    <!-- L'écran de connexion est ajouté ici par session.js. -->
+
+    <div id="app" class="app" hidden>
+      <header class="topbar">
+        <div class="topbar__inner">
+          <span class="brand">Cocon</span>
+          <span class="spacer"></span>
+          <span id="updated" class="small muted"></span>
+          <button id="refresh" class="icon-button" type="button" aria-label="Actualiser"></button>
+          <button id="open-more" class="icon-button" type="button" aria-label="Plus d'options"></button>
+        </div>
+      </header>
+
+      <p id="banner" class="banner" role="alert" hidden></p>
+
+      <main id="rooms" class="rooms">
+        <div id="loading" class="loading-rooms">
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Lecture de vos climatiseurs…</span>
+        </div>
+      </main>
+    </div>
+
+    <!-- Réglages d'une pièce : rempli par app.js -->
+    <dialog id="sheet" class="sheet" aria-labelledby="sheet-title"></dialog>
+
+    <!-- Options du compte -->
+    <dialog id="more" class="sheet sheet--small" aria-labelledby="more-title">
+      <div class="sheet__head">
+        <h2 id="more-title">Cocon</h2>
+        <span class="spacer"></span>
+        <button class="button button--quiet" type="button" data-close>Fermer</button>
       </div>
-    </main>
+      <div class="sheet__body">
+        <p id="who" class="muted"></p>
+        <a class="button" href="/diagnostic">Ouvrir le diagnostic</a>
+        <button id="signout" class="button" type="button">Se déconnecter</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/assets/app.js"></script>
   </body>
 </html>

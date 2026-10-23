@@ -1,10 +1,5 @@
-/* Propre à la page de diagnostic. */
+/* Propre à la page de diagnostic (page technique, volontairement sobre). */
 
-.signin {
-  min-height: 100dvh;
-  display: grid;
-  align-content: center;
-}
 .summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -12,20 +7,20 @@
 }
 .stat {
   background: var(--surface);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 .stat__label {
-  font-size: 13px;
-  color: var(--text-muted);
+  font-size: 14px;
+  color: var(--ink-2);
 }
 .stat__value {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
+  font-stretch: 85%;
   overflow-wrap: anywhere;
 }
 .device__head {
@@ -37,6 +32,9 @@
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.device__model {
+  margin-top: 4px;
 }
 details > summary {
   cursor: pointer;
@@ -50,11 +48,14 @@ details > summary::-webkit-details-marker {
   display: none;
 }
 details > summary::before {
-  content: "▸ ";
-  color: var(--text-muted);
+  content: "+ ";
+  color: var(--ink-2);
 }
 details[open] > summary::before {
-  content: "▾ ";
+  content: "− ";
+}
+.details__body {
+  margin-top: 10px;
 }
 .caps {
   margin: 6px 0 0;
@@ -64,24 +65,23 @@ details[open] > summary::before {
 }
 .caps li {
   display: grid;
-  grid-template-columns: 4.5em minmax(0, 1fr) auto;
+  grid-template-columns: 4.8em minmax(0, 1fr) auto;
   gap: 10px;
   align-items: baseline;
   padding: 9px 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
   font-size: 15px;
 }
 .caps .id {
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--text-muted);
+  font-size: 14px;
+  font-stretch: 85%;
+  color: var(--ink-2);
 }
 .caps .name {
   overflow-wrap: anywhere;
 }
 .caps .value {
-  font-family: var(--mono);
-  font-size: 14px;
+  font-stretch: 85%;
   text-align: right;
   max-width: 11em;
   overflow-wrap: anywhere;
@@ -94,11 +94,12 @@ details[open] > summary::before {
 textarea.report {
   width: 100%;
   min-height: 40vh;
-  font: 13px/1.4 var(--mono);
+  font: 14px/1.4 var(--font);
+  font-stretch: 85%;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
   padding: 12px;
 }
 .loading {
@@ -107,10 +108,4 @@ textarea.report {
   gap: 12px;
   padding: 32px 0;
   justify-content: center;
-}
-.device__model {
-  margin-top: 4px;
-}
-.details__body {
-  margin-top: 10px;
 }

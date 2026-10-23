@@ -1,0 +1,520 @@
+/*
+ * Tableau de bord : une pièce par panneau, entièrement coloré selon son état.
+ * C'est le seul élément audacieux de l'interface ; tout le reste reste discret.
+ */
+
+.app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.icon-button {
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 120ms var(--ease-out);
+}
+
+.icon-button:active {
+  transform: scale(0.92);
+}
+
+.icon-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+.icon-button[aria-busy="true"] svg {
+  animation: spin 900ms linear infinite;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .icon-button:hover {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+  }
+}
+
+.banner {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 15px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--lichen));
+}
+
+.loading-rooms {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 16px;
+  color: var(--ink-2);
+}
+
+/* --- Panneaux --- */
+
+.rooms {
+  flex: 1;
+  display: grid;
+  grid-auto-rows: minmax(min(46dvh, 420px), 1fr);
+}
+
+@media (min-width: 760px) {
+  .rooms {
+    grid-auto-rows: auto;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+}
+
+.pane {
+  --pane-bg: var(--surface);
+  --pane-ink: var(--ink);
+  --pane-soft: var(--ink-2);
+  background: var(--pane-bg);
+  color: var(--pane-ink);
+  padding: 20px 20px 18px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 12px;
+  min-width: 0;
+  transition:
+    background-color 450ms var(--ease-out),
+    color 450ms var(--ease-out);
+}
+
+.pane[data-mode="heat"],
+.pane[data-mode="cool"],
+.pane[data-mode="auto"],
+.pane[data-mode="fan"],
+.pane[data-mode="dry"] {
+  --pane-ink: var(--on-color);
+  --pane-soft: var(--on-color);
+}
+
+.pane[data-mode="heat"] {
+  --pane-bg: var(--braise);
+}
+.pane[data-mode="cool"] {
+  --pane-bg: var(--glacier);
+}
+.pane[data-mode="auto"] {
+  --pane-bg: var(--violet);
+}
+.pane[data-mode="fan"],
+.pane[data-mode="dry"] {
+  --pane-bg: var(--sarcelle);
+}
+
+/* Deux pièces arrêtées l'une sous l'autre : un simple filet les sépare. */
+.pane:not([data-active]) + .pane:not([data-active]) {
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 760px) {
+  .pane:not([data-active]) + .pane:not([data-active]) {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
+}
+
+.pane__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pane__name {
+  font-size: 28px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.pane__state {
+  font-size: 17px;
+  font-weight: 550;
+  text-align: right;
+}
+
+.pane__body {
+  align-self: center;
+  min-width: 0;
+}
+
+/* La consigne : le chiffre est le héros du panneau. */
+.setpoint {
+  font-size: clamp(96px, 31vw, 176px);
+  line-height: 0.88;
+  font-weight: 720;
+  font-stretch: 75%;
+  letter-spacing: -0.045em;
+  margin-left: -0.05em;
+  transition: opacity 200ms var(--ease-out);
+}
+
+.pane:not([data-active]) .setpoint {
+  opacity: 0.35;
+}
+
+.setpoint[data-draft] {
+  opacity: 0.8;
+}
+
+.measured {
+  margin-top: 10px;
+  font-size: 17px;
+}
+
+.pane__note {
+  margin-top: 10px;
+  font-size: 15px;
+  max-width: 34em;
+}
+
+.pane__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.round {
+  appearance: none;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+  background: transparent;
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 110ms var(--ease-out);
+}
+
+.round svg {
+  width: 26px;
+  height: 26px;
+}
+
+.round:active {
+  transform: scale(0.92);
+}
+
+.round[disabled],
+.pane .button[disabled] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.pane .button {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  min-height: 56px;
+}
+
+.pane .button--solid {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--lichen);
+}
+
+.pane .button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pane__status {
+  min-height: 1.45em;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pane__status .spinner {
+  width: 16px;
+  height: 16px;
+}
+
+.pane__status[data-kind="error"] {
+  font-weight: 650;
+}
+
+.pane__status[data-kind="confirm"] {
+  font-weight: 650;
+}
+
+.pane:not([data-active]) .pane__status[data-kind="error"] {
+  color: var(--danger);
+}
+
+.pane:not([data-active]) .pane__status[data-kind="confirm"] {
+  color: var(--warn);
+}
+
+.empty {
+  padding: 32px 16px;
+  max-width: 34em;
+}
+
+/* --- Fiche de réglages (bas d'écran) --- */
+
+dialog.sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 90dvh;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 22px 22px 0 0;
+  background: var(--surface);
+  color: var(--ink);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+dialog.sheet[open] {
+  animation: sheet-in 280ms var(--ease-out);
+}
+
+dialog.sheet::backdrop {
+  background: rgb(5 10 15 / 0.45);
+}
+
+@media (min-width: 760px) {
+  dialog.sheet {
+    margin: auto;
+    border-radius: 22px;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(32px);
+    opacity: 0;
+  }
+}
+
+.sheet__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet__head h2 {
+  font-size: 24px;
+}
+
+.sheet__body {
+  padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 24px;
+}
+
+.sheet--small .sheet__body {
+  gap: 12px;
+}
+
+.sheet__status {
+  min-height: 1.45em;
+  font-size: 15px;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet__status[data-kind="error"] {
+  color: var(--danger);
+  font-weight: 650;
+}
+
+.group h3 {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.group__help {
+  margin-top: 8px;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chips--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.chips--positions {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-top: 8px;
+}
+
+.chip {
+  appearance: none;
+  min-height: 48px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 600 16px/1.1 var(--font);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    transform 110ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+
+.chip:active {
+  transform: scale(0.96);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+.chip[data-confirm] {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.chip[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stepper__value {
+  font-size: 56px;
+  font-weight: 720;
+  font-stretch: 75%;
+  letter-spacing: -0.03em;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.option:first-of-type {
+  border-top: 0;
+}
+
+.option__text {
+  display: grid;
+  gap: 2px;
+}
+
+.option__label {
+  font-weight: 600;
+}
+
+.option__help {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 180ms var(--ease-out);
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform 180ms var(--ease-out);
+}
+
+.switch[aria-checked="true"] {
+  background: var(--ink);
+}
+
+.switch[aria-checked="true"]::after {
+  transform: translateX(20px);
+  background: var(--surface); /* contraste avec le fond encre, en clair comme en sombre */
+}
+
+.switch[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.warning {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, var(--surface));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane,
+  .setpoint,
+  .round,
+  .chip,
+  .switch,
+  .switch::after {
+    transition: none;
+  }
+  dialog.sheet[open] {
+    animation: none;
+  }
+  .icon-button[aria-busy="true"] svg {
+    animation-duration: 2700ms;
+  }
+}

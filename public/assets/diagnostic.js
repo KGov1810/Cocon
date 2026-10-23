@@ -4,6 +4,7 @@
  */
 
 import { api, copyText, el, generateAccessKey } from "./api.js";
+import { createSignin, signOut } from "./session.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -11,46 +12,54 @@ let lastReport = null;
 
 /* ---------- Connexion ---------- */
 
-function showSignin(message) {
-  $("report-view").hidden = true;
-  $("signin").hidden = false;
-  $("signin-error").hidden = !message;
-  $("signin-error").textContent = message ?? "";
-  $("access-key").focus();
+/** Outil de première installation : générer une clé d'accès. */
+function keyGenerator() {
+  const key = el("p", { class: "notice code" });
+  const copy = el("button", { class: "button", type: "button" }, "Copier la clé");
+  const result = el("div", { class: "stack stack--tight", hidden: true }, [key, copy]);
+
+  copy.addEventListener("click", async () => {
+    copy.textContent = (await copyText(key.textContent)) ? "Clé copiée" : "Sélectionnez la clé pour la copier";
+  });
+
+  const generate = el("button", { class: "button", type: "button" }, "Générer une clé");
+  generate.addEventListener("click", () => {
+    key.textContent = generateAccessKey();
+    copy.textContent = "Copier la clé";
+    result.hidden = false;
+  });
+
+  return el("details", { class: "card" }, [
+    el("summary", {}, "Première installation : créer une clé"),
+    el("div", { class: "stack details__body" }, [
+      el("p", { class: "small muted" }, [
+        "Chaque personne a sa propre clé. Générez-en une, puis ajoutez-la au secret ",
+        el("span", { class: "code" }, "ACCESS_KEYS"),
+        " dans Cloudflare sous la forme ",
+        el("span", { class: "code" }, "Prénom:clé"),
+        " (voir le README).",
+      ]),
+      generate,
+      result,
+    ]),
+  ]);
 }
 
-$("signin-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const key = $("access-key").value.trim();
-  if (!key) return showSignin("Saisissez votre clé d'accès.");
-
-  const button = event.submitter;
-  button.disabled = true;
-  try {
-    const me = await api("POST", "/api/session", { key });
-    $("access-key").value = "";
-    openReport(me.name);
-  } catch (err) {
-    showSignin(err.message);
-  } finally {
-    button.disabled = false;
-  }
+const signin = createSignin({
+  subtitle: "Diagnostic de votre installation",
+  extra: keyGenerator(),
+  onSignedIn: openReport,
 });
+document.body.prepend(signin.node);
 
-$("generate").addEventListener("click", () => {
-  $("generated-key").textContent = generateAccessKey();
-  $("copy-generated").textContent = "Copier la clé";
-  $("generated").hidden = false;
-});
-
-$("copy-generated").addEventListener("click", async () => {
-  const ok = await copyText($("generated-key").textContent);
-  $("copy-generated").textContent = ok ? "Clé copiée" : "Sélectionnez la clé pour la copier";
-});
+function showSignin(message) {
+  $("report-view").hidden = true;
+  signin.show(message);
+}
 
 $("signout").addEventListener("click", async () => {
   try {
-    await api("DELETE", "/api/session");
+    await signOut();
     showSignin();
   } catch (err) {
     $("report-error").textContent = `Déconnexion impossible : ${err.message}`;
@@ -61,7 +70,7 @@ $("signout").addEventListener("click", async () => {
 /* ---------- Rapport ---------- */
 
 function openReport(name) {
-  $("signin").hidden = true;
+  signin.hide();
   $("report-view").hidden = false;
   $("who").textContent = name;
   loadReport();
@@ -142,7 +151,7 @@ function deviceCard(device, index) {
     device.zoneId != null ? `zone ${device.zoneId}` : null,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   return el("section", { class: "card" }, [
     el("div", { class: "device__head" }, [
