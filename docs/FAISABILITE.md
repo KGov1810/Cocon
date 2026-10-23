@@ -28,7 +28,7 @@ Lues par la page `/diagnostic` sur les deux unités (`ROOM_0` = Chambre,
 | Silence | 100802 | Oui |
 | Volets : 4 positions fixes ou balayage | 100803, 100804 | Oui. Le catalogue annonce 6 positions, mais l'essai sur l'unité (octobre 2026) a montré que 5 et 6 n'existent pas. |
 | Pleine puissance | 100505 | Oui |
-| Économie d'énergie | 100507 (activée sur les deux unités) | Oui, marquée expérimentale : absente de l'appli Cozytouch, effet non documenté |
+| Économie d'énergie (limite de puissance) | 100507 (activée d'origine sur les deux unités) | Oui. Absente de l'appli Cozytouch. L'essai (octobre 2026) confirme qu'elle bride la puissance : la couper accélère la chauffe. |
 | Programme hebdomadaire chaud et froid (2 à 8 plages par jour) | 184 (BASIC / PROG), 100320 à 100333, dérogation 157 et 158 | Phase 3 (dérogation déjà gérée) |
 | Absence (toute la maison) | Hub : 152, 172, 222 | Phase 3 |
 | Indicateur « chauffe / refroidit en cours » | 153 | Non : sa valeur ne change jamais sur cette installation |

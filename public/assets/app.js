@@ -488,7 +488,7 @@ function renderSheet() {
     options.push(
       option(
         "Économie d'énergie",
-        "Expérimental : absent de l'appli Cozytouch, son effet exact n'est pas documenté.",
+        "Limite la puissance de l'unité pour consommer moins. Coupez-la pour chauffer ou refroidir plus vite.",
         room.economy,
         busy,
         () => send(room, "economy", !room.economy, { economy: !room.economy }),

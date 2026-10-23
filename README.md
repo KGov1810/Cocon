@@ -102,10 +102,10 @@ revient.
 **Une seule unité extérieure** ne peut pas chauffer une pièce et refroidir l'autre en
 même temps. Cocon le signale et demande de confirmer un tel choix d'un second appui.
 
-**Réglage expérimental** :
-- *Économie d'énergie* est activée sur les deux unités mais absente de l'appli
-  Cozytouch. Son effet exact n'est pas documenté : essayez de la couper si la chauffe
-  vous paraît lente.
+**Économie d'énergie** : ce réglage, absent de l'appli Cozytouch, limite la puissance
+de l'unité pour consommer moins. L'essai l'a confirmé : activé, il rend la chauffe
+moins puissante. Il était activé d'origine sur les deux unités. Coupez-le pour chauffer
+ou refroidir plus vite, et réactivez-le pour économiser.
 
 **Pour la deuxième personne** : générez-lui une clé depuis le diagnostic, ajoutez-la
 au secret `ACCESS_KEYS` (`Kevin:clé1, Prénom:clé2`), puis envoyez-lui l'adresse et
