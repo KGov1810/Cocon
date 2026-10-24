@@ -78,7 +78,9 @@ avec votre clé : la session dure 180 jours. Pour l'avoir comme une appli, touch
 s'ouvre en plein écran. Il peut vous être demandé de vous reconnecter depuis l'icône,
 car l'appli installée peut avoir ses propres réglages.
 
-**L'écran principal** montre une pièce par panneau. La couleur indique l'état :
+**L'écran principal** montre une pièce à la fois. Les onglets du haut indiquent la
+température et le mode des deux pièces ; touchez-en un, ou glissez de côté, pour
+changer de pièce. Tout l'écran prend la couleur de l'état :
 
 | Couleur | État |
 | --- | --- |
@@ -89,14 +91,21 @@ car l'appli installée peut avoir ses propres réglages.
 | Clair | Arrêt |
 
 - Le grand chiffre est la **consigne**, et la ligne en dessous la température mesurée.
-- **+ et −** changent la consigne. Elle part 1,2 s après le dernier appui.
-- **⏻** éteint la pièce. **Allumer** la rallume dans le dernier mode utilisé, ou par
+- **Glissez vers le haut ou le bas**, n'importe où au centre, pour régler la
+  consigne : un demi-degré tous les 22 px, avec l'écart affiché en direct. Elle part
+  dès que vous relâchez. Avec VoiceOver ou un clavier, un curseur classique fait le
+  même réglage ; il part 1,2 s après le dernier changement.
+- Un **niveau** translucide monte avec la consigne. Sa vague va plus vite quand
+  l'unité souffle fort : c'est une estimation tirée des réglages, Atlantic ne
+  publiant ni la puissance ni la vitesse réelle.
+- **⏻** (en haut) éteint la pièce, ou la rallume dans le dernier mode utilisé, ou par
   défaut en chauffage d'octobre à avril et en froid le reste de l'année.
-- **Réglages** ouvre la fiche complète de la pièce : mode, consigne, ventilation,
-  silence, volets (balayage ou 4 positions fixes), pleine puissance et économie
-  d'énergie.
+- **Quatre tuiles** en bas résument et ouvrent les réglages : **Mode**, **Vitesse**
+  (auto, silence, basse, moyenne, haute), **Volets** (balayage ou 4 positions fixes)
+  et **Options** (pleine puissance, économie d'énergie). Un choix s'applique et
+  referme le panneau ; tirer la poignée vers le bas le ferme aussi.
 
-**Sous chaque pièce**, une ligne suit la dernière commande : « Envoi à Atlantic… »,
+**Sous le chiffre**, une ligne suit la dernière commande : « Envoi à Atlantic… »,
 puis « Confirmé par Atlantic en 2,1 s », un message d'attente ou la raison d'un refus.
 L'écran se met à jour toutes les 20 s quand l'appli est ouverte, et dès qu'on y
 revient.
@@ -109,9 +118,9 @@ de l'unité pour consommer moins. L'essai l'a confirmé : activé, il rend la ch
 moins puissante. Il était activé d'origine sur les deux unités. Coupez-le pour chauffer
 ou refroidir plus vite, et réactivez-le pour économiser.
 
-**Programme hebdomadaire** (fiche Réglages → *Programme*) :
+**Programme hebdomadaire** (bandeau sous les onglets) :
 - **Suivre le programme** : l'unité applique d'elle-même les changements prévus, même
-  téléphone éteint. Le panneau de la pièce indique le prochain, par exemple
+  téléphone éteint. Le bandeau indique le prochain, par exemple
   « Programme : 19° à 22:00 ».
 - **Modifier le programme** : choisissez le programme *Chauffage* ou *Froid* et le jour,
   puis ajoutez ou modifiez les changements (heure au quart d'heure, température en
@@ -121,15 +130,15 @@ ou refroidir plus vite, et réactivez-le pour économiser.
 - **Changer la consigne pendant que le programme tourne** la modifie à la main
   jusqu'au prochain changement prévu, puis le programme reprend.
 
-**Absence** (menu **…** → *Absence*, ou le bandeau en haut quand une absence est
-prévue) : départ maintenant ou plus tard, et date de retour. Les climatiseurs
+**Absence** (bouton valise en haut, menu **…** → *Absence*, ou le bandeau quand une
+absence est prévue) : départ maintenant ou plus tard, et date de retour. Les climatiseurs
 s'arrêtent pendant l'absence et reprennent leur mode au retour. Elle s'annule d'un
 appui.
 
 **Pour la deuxième personne** : générez-lui une clé depuis le diagnostic, ajoutez-la
 au secret `ACCESS_KEYS` (`Kevin:clé1, Prénom:clé2`), puis envoyez-lui l'adresse et
-sa clé. Le menu **…** en haut à droite donne accès à l'absence, au diagnostic et à la
-déconnexion.
+sa clé. Le menu **…** en haut à droite donne accès à l'heure de mise à jour, à
+l'actualisation, à l'absence, au diagnostic et à la déconnexion.
 
 ## Essai guidé (phase 3)
 
@@ -139,7 +148,7 @@ l'essai B. Notez l'état de départ : le programme d'origine est 20 °C à 06:00
 19 °C à 22:00, chaque jour.
 
 **A. Créneau « Arrêt » du programme** (sur la Chambre, unité allumée en chauffage)
-1. Fiche Réglages → *Modifier le programme* → *Chauffage*, jour d'aujourd'hui.
+1. Bandeau Programme → *Modifier le programme* → *Chauffage*, jour d'aujourd'hui.
 2. Ajoutez un **Arrêt** au prochain quart d'heure, dans au moins 20 min. Ajoutez
    ensuite une **température** (par exemple 21°) 1 h plus tard. Enregistrez avec
    *Ce jour*.

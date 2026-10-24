@@ -16,8 +16,8 @@ iPhone (appli web Cocon)  →  Worker Cloudflare « cocon »  →  Cloud Atlanti
 | Programme | Lit les programmes chaud et froid, calcule le prochain changement à l'heure du logement, valide un jour de programme et le traduit en écritures. Gère aussi la dérogation jusqu'au prochain changement. | `src/program.js` |
 | Absence | Lit l'état sur le hub ; valide une fenêtre ; prépare le PUT du logement. | `src/absence.js` |
 | Commandes | Lit l'état (avec un cache de 60 s pour les commandes), exécute les écritures et suit leur confirmation. Gère aussi l'absence. | `src/commands.js`, `src/errors.js` |
-| Tableau de bord | Panneaux Chambre / Salon colorés selon l'état, fiche de réglages par pièce, suivi des commandes. | `public/index.html`, `public/assets/app.*`, `public/assets/logic.js`, `public/assets/ui.js` |
-| Programme et absence (interface) | Ligne de programme sur les panneaux, éditeur jour par jour, bandeau et fiche Absence. | `public/assets/program-editor.js`, `public/assets/absence-view.js` |
+| Tableau de bord | Une pièce à la fois, colorée selon son état : consigne réglée au doigt, niveau et vague, onglets, quatre tuiles qui ouvrent les panneaux de réglages, suivi des commandes. | `public/index.html`, `public/assets/app.*`, `public/assets/room-view.js`, `public/assets/logic.js`, `public/assets/ui.js` |
+| Programme et absence (interface) | Bandeau de programme, éditeur jour par jour, bandeau et fiche Absence. | `public/assets/program-editor.js`, `public/assets/absence-view.js` |
 | Installation sur l'écran d'accueil | Manifeste et icônes. | `public/manifest.webmanifest`, `public/assets/icons/` |
 | Diagnostic | Lecture seule de tout ce que le compte expose, données sensibles masquées. | `src/diagnostic.js`, `public/diagnostic.html` |
 
@@ -72,10 +72,11 @@ Téléphone                    Relais                               Atlantic
    │ affiche la valeur demandée jusqu'à ce qu'Atlantic la renvoie (90 s max)
 ```
 
-- **Une commande à la fois par pièce.** Les boutons de la pièce sont désactivés
+- **Une commande à la fois par pièce.** Les choix de la pièce sont désactivés
   pendant l'envoi.
-- **Consigne** : la valeur s'affiche dès l'appui sur + ou −, puis part 1,2 s après
-  le dernier appui. Plusieurs appuis ne font donc qu'un seul envoi.
+- **Consigne** : glissée au doigt, la valeur suit le geste et part quand le doigt se
+  lève (un seul envoi par geste). Au curseur natif (clavier, VoiceOver), elle part
+  1,2 s après le dernier réglage.
 - **Programme actif** : la commande passe d'abord en dérogation (capacité 157),
   sinon le programme reprendrait la main.
 - **Multi-split** : passer en chaud pendant que l'autre pièce refroidit, ou
