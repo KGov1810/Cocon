@@ -16,8 +16,11 @@ iPhone (appli web Cocon)  →  Worker Cloudflare « cocon »  →  Cloud Atlanti
 | Programme | Lit les programmes chaud et froid, calcule le prochain changement à l'heure du logement, valide un jour de programme et le traduit en écritures. Gère aussi la dérogation jusqu'au prochain changement. | `src/program.js` |
 | Absence | Lit l'état sur le hub ; valide une fenêtre ; prépare le PUT du logement. | `src/absence.js` |
 | Commandes | Lit l'état (avec un cache de 60 s pour les commandes), exécute les écritures et suit leur confirmation. Gère aussi l'absence. | `src/commands.js`, `src/errors.js` |
-| Tableau de bord | Une pièce à la fois, colorée selon son état : consigne réglée au doigt, niveau et vague, onglets, quatre tuiles qui ouvrent les panneaux de réglages, suivi des commandes. | `public/index.html`, `public/assets/app.*`, `public/assets/room-view.js`, `public/assets/logic.js`, `public/assets/ui.js` |
-| Programme et absence (interface) | Bandeau de programme, éditeur jour par jour, bandeau et fiche Absence. | `public/assets/program-editor.js`, `public/assets/absence-view.js` |
+| Tableau de bord : état et envois | État de l'écran, lecture toutes les 20 s, envoi des commandes (une à la fois par pièce), valeurs affichées avant confirmation, enchaînement des panneaux. | `public/index.html`, `public/assets/app.*` |
+| Tableau de bord : écran de la pièce | Une pièce à la fois, colorée selon son état : onglets, marche/arrêt, bandeau, consigne réglée au doigt, niveau et vague, lignes d'état, quatre tuiles, couleur de la barre d'état. | `public/assets/room-view.js` |
+| Tableau de bord : panneaux de réglages | Contenu des panneaux Mode, Vitesse, Volets, Options et Programme. | `public/assets/settings-view.js` |
+| Logique d'affichage et éléments partagés | Calculs sans DOM, testés (`test/logic.test.js`) ; icônes, choix, interrupteurs, poignée, en-tête, ligne d'état et fermeture des panneaux. | `public/assets/logic.js`, `public/assets/ui.js` |
+| Programme et absence (interface) | Texte du bandeau de programme, éditeur jour par jour, texte du bandeau et fiche Absence. | `public/assets/program-editor.js`, `public/assets/absence-view.js` |
 | Installation sur l'écran d'accueil | Manifeste et icônes. | `public/manifest.webmanifest`, `public/assets/icons/` |
 | Diagnostic | Lecture seule de tout ce que le compte expose, données sensibles masquées. | `src/diagnostic.js`, `public/diagnostic.html` |
 

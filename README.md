@@ -130,15 +130,15 @@ ou refroidir plus vite, et réactivez-le pour économiser.
 - **Changer la consigne pendant que le programme tourne** la modifie à la main
   jusqu'au prochain changement prévu, puis le programme reprend.
 
-**Absence** (bouton valise en haut, menu **…** → *Absence*, ou le bandeau quand une
-absence est prévue) : départ maintenant ou plus tard, et date de retour. Les climatiseurs
+**Absence** (bouton valise en haut, ou le bandeau quand une absence est prévue ; le
+bouton n'apparaît pas si le hub Cozytouch est illisible) : départ maintenant ou plus tard, et date de retour. Les climatiseurs
 s'arrêtent pendant l'absence et reprennent leur mode au retour. Elle s'annule d'un
 appui.
 
 **Pour la deuxième personne** : générez-lui une clé depuis le diagnostic, ajoutez-la
 au secret `ACCESS_KEYS` (`Kevin:clé1, Prénom:clé2`), puis envoyez-lui l'adresse et
-sa clé. Le menu **…** en haut à droite donne accès à l'heure de mise à jour, à
-l'actualisation, à l'absence, au diagnostic et à la déconnexion.
+sa clé. Le menu **…** en haut à droite donne accès à l'actualisation, au diagnostic
+et à la déconnexion ; l'heure de mise à jour s'affiche sous le chiffre.
 
 ## Essai guidé (phase 3)
 
@@ -161,10 +161,10 @@ l'essai B. Notez l'état de départ : le programme d'origine est 20 °C à 06:00
    puis désactivez *Suivre le programme* si vous ne voulez pas l'utiliser.
 
 **B. Absence**
-1. Menu **…** → *Absence* → *Départ maintenant*, retour dans 30 min →
+1. Bouton valise en haut → *Départ maintenant*, retour dans 30 min →
    *Programmer l'absence*.
 2. Les deux unités s'arrêtent-elles ? Le bandeau « Absence en cours » apparaît-il ?
-3. *Modifier* → **Annuler l'absence** : les unités repartent-elles dans leur mode ?
+3. Bandeau « Absence en cours » → **Annuler l'absence** : les unités repartent-elles dans leur mode ?
 
 Si une étape ne se passe pas comme prévu, notez ce que vous voyez (appli, unité,
 messages) et transmettez le rapport du diagnostic.
