@@ -24,14 +24,6 @@ export function describeOutcome({ status, elapsedMs }) {
     : "Envoyé. Atlantic n'a pas encore confirmé, l'affichage se mettra à jour.";
 }
 
-/** Consigne suivante (+1 ou −1 pas), bornée ; null si la consigne ne se règle pas. */
-export function stepSetpoint(room, direction) {
-  const range = room.setpointRange;
-  if (!range || room.setpoint === null) return null;
-  const next = Math.round((room.setpoint + direction * range.step) / range.step) * range.step;
-  return Math.min(range.max, Math.max(range.min, next));
-}
-
 const HEATING = new Set(["heat"]);
 const COOLING = new Set(["cool", "dry"]);
 

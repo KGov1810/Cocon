@@ -1,191 +1,762 @@
 /*
- * Tableau de bord : une pièce par panneau, entièrement coloré selon son état.
- * C'est le seul élément audacieux de l'interface ; tout le reste reste discret.
+ * Tableau de bord : une pièce à la fois, tout l'écran prend la couleur de son
+ * mode. Un niveau translucide monte avec la consigne et sa vague va plus vite
+ * quand l'unité souffle fort. C'est le seul élément audacieux de l'interface ;
+ * les panneaux de réglages restent sobres.
  */
 
-.app {
+/* --- Couleurs de l'écran selon le mode --- */
+
+.scene {
+  --scene-bg: var(--lichen);
+  --scene-ink: var(--ink);
+  --scene-soft: var(--ink-2);
+  --level-color: color-mix(in srgb, var(--ink) 7%, transparent);
+  --glass: var(--surface);
+  --glass-line: var(--line);
+  --tabs-bg: color-mix(in srgb, var(--ink) 6%, transparent);
+  --solid: var(--ink);
+  --solid-ink: var(--lichen);
+
+  position: relative;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: var(--scene-bg);
+  color: var(--scene-ink);
+  transform-origin: 50% 0;
+  transition:
+    background-color 450ms var(--ease-out),
+    color 450ms var(--ease-out),
+    transform 360ms var(--ease-drawer),
+    border-radius 360ms var(--ease-drawer);
 }
 
-.icon-button {
-  appearance: none;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
+.scene[data-mode="heat"],
+.scene[data-mode="cool"],
+.scene[data-mode="auto"],
+.scene[data-mode="fan"],
+.scene[data-mode="dry"] {
+  --scene-ink: var(--on-color);
+  --scene-soft: color-mix(in srgb, var(--on-color) 84%, transparent);
+  --level-color: rgb(255 247 242 / 0.16);
+  --glass: rgb(21 33 44 / 0.16);
+  --glass-line: rgb(255 247 242 / 0.38);
+  --tabs-bg: rgb(21 33 44 / 0.18);
+  --solid: var(--on-color);
+  --solid-ink: #15212c;
+}
+
+.scene[data-mode="heat"] {
+  --scene-bg: var(--braise);
+}
+.scene[data-mode="cool"] {
+  --scene-bg: var(--glacier);
+}
+.scene[data-mode="auto"] {
+  --scene-bg: var(--violet);
+}
+.scene[data-mode="fan"],
+.scene[data-mode="dry"] {
+  --scene-bg: var(--sarcelle);
+}
+
+/* Un panneau ouvert : l'écran recule un peu derrière lui. */
+body {
+  transition: background-color 360ms var(--ease-drawer);
+}
+
+body:has(dialog[open]) {
+  background: #05090c;
+}
+
+body:has(dialog[open]) .scene {
+  transform: scale(0.94) translateY(10px);
+  border-radius: 28px;
+}
+
+/* --- Niveau et vague --- */
+
+.level {
+  position: absolute;
+  inset: 0;
+  background: var(--level-color);
+  transform: translateY(88%);
+  pointer-events: none;
+  transition:
+    transform 300ms var(--ease-out),
+    background-color 450ms var(--ease-out);
+}
+
+/* Pendant le glissement, le niveau suit le doigt sans traîner. */
+.scene:has(.dial[data-drag="y"]) .level {
+  transition-duration: 90ms;
+}
+
+.wave {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  width: 200%;
+  height: 28px;
+  animation: wave 6s linear infinite;
+}
+
+.wave path {
+  fill: var(--level-color);
+  transition: fill 450ms var(--ease-out);
+}
+
+.wave[data-still] {
+  animation-play-state: paused;
+}
+
+@keyframes wave {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* --- Mise en page --- */
+
+.scene__inner {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  max-width: 560px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 56px;
+}
+
+.tabs {
+  flex: 1;
+  min-width: 0;
   display: grid;
-  place-items: center;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border-radius: 16px;
+  background: var(--tabs-bg);
+}
+
+.tab,
+.tool,
+.ribbon,
+.tile {
+  appearance: none;
+  color: inherit;
+  font-family: var(--font);
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 120ms var(--ease-out);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    transform 140ms var(--ease-out),
+    background-color 200ms var(--ease-out),
+    border-color 200ms var(--ease-out);
 }
 
-.icon-button:active {
-  transform: scale(0.92);
+.tab:active,
+.ribbon:active,
+.tile:active {
+  transform: scale(0.97);
 }
 
-.icon-button svg {
+.tool:active {
+  transform: scale(0.94);
+}
+
+.tab {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.tab[aria-pressed="true"] {
+  background: var(--solid);
+  color: var(--solid-ink);
+}
+
+.tab__name {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab__sub {
+  font-size: 12px;
+  line-height: 1.1;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.tool {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 14px;
+  border: 1.5px solid var(--glass-line);
+  background: var(--glass);
+  display: grid;
+  place-items: center;
+}
+
+.tool--round {
+  border-radius: 50%;
+}
+
+.tool[aria-pressed="true"] {
+  background: var(--solid);
+  border-color: var(--solid);
+  color: var(--solid-ink);
+}
+
+.tool[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.tool svg,
+.tile__icon svg {
   width: 22px;
   height: 22px;
 }
 
-.icon-button[aria-busy="true"] svg {
-  animation: spin 900ms linear infinite;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .icon-button:hover {
-    background: color-mix(in srgb, currentColor 8%, transparent);
-  }
-}
-
 .banner {
-  margin: 0;
-  padding: 12px 16px;
+  margin: 8px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
   font-size: 15px;
   color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 10%, var(--lichen));
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+
+.ribbon {
+  margin-top: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--glass-line);
+  background: var(--glass);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.ribbon__icon {
+  display: grid;
+  flex: none;
+}
+
+.ribbon__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ribbon__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Pièce --- */
+
+.room {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .loading-rooms {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   padding: 48px 16px;
-  color: var(--ink-2);
+  color: var(--scene-soft);
 }
 
-/* --- Panneaux --- */
-
-.rooms {
-  flex: 1;
-  display: grid;
-  grid-auto-rows: minmax(min(46dvh, 420px), 1fr);
-}
-
-@media (min-width: 760px) {
-  .rooms {
-    grid-auto-rows: auto;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-  }
-}
-
-.pane {
-  --pane-bg: var(--surface);
-  --pane-ink: var(--ink);
-  --pane-soft: var(--ink-2);
-  background: var(--pane-bg);
-  color: var(--pane-ink);
-  padding: 20px 20px 18px;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 12px;
-  min-width: 0;
-  transition:
-    background-color 450ms var(--ease-out),
-    color 450ms var(--ease-out);
-}
-
-.pane[data-mode="heat"],
-.pane[data-mode="cool"],
-.pane[data-mode="auto"],
-.pane[data-mode="fan"],
-.pane[data-mode="dry"] {
-  --pane-ink: var(--on-color);
-  --pane-soft: var(--on-color);
-}
-
-.pane[data-mode="heat"] {
-  --pane-bg: var(--braise);
-}
-.pane[data-mode="cool"] {
-  --pane-bg: var(--glacier);
-}
-.pane[data-mode="auto"] {
-  --pane-bg: var(--violet);
-}
-.pane[data-mode="fan"],
-.pane[data-mode="dry"] {
-  --pane-bg: var(--sarcelle);
-}
-
-/* Deux pièces arrêtées l'une sous l'autre : un simple filet les sépare. */
-.pane:not([data-active]) + .pane:not([data-active]) {
-  border-top: 1px solid var(--line);
-}
-
-@media (min-width: 760px) {
-  .pane:not([data-active]) + .pane:not([data-active]) {
-    border-top: 0;
-    border-left: 1px solid var(--line);
-  }
-}
-
-.pane__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.pane__name {
-  font-size: 28px;
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
-
-.pane__state {
-  font-size: 17px;
-  font-weight: 550;
-  text-align: right;
-}
-
-.pane__body {
-  align-self: center;
-  min-width: 0;
-}
-
-/* La consigne : le chiffre est le héros du panneau. */
-.setpoint {
-  font-size: clamp(96px, 31vw, 176px);
-  line-height: 0.88;
-  font-weight: 720;
-  font-stretch: 75%;
-  letter-spacing: -0.045em;
-  margin-left: -0.05em;
-  transition: opacity 200ms var(--ease-out);
-}
-
-.pane:not([data-active]) .setpoint {
-  opacity: 0.35;
-}
-
-.setpoint[data-draft] {
-  opacity: 0.8;
-}
-
-.measured {
-  margin-top: 10px;
-  font-size: 17px;
-}
-
-.pane__note {
-  margin-top: 10px;
-  font-size: 15px;
+.empty {
+  padding: 32px 0;
   max-width: 34em;
 }
 
-.pane__controls {
+/* La surface de réglage : on y pose le doigt n'importe où. */
+.dial {
+  flex: 1;
+  min-height: 300px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  text-align: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: ns-resize;
 }
+
+.dial--locked {
+  cursor: default;
+}
+
+.dial__state {
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Le chiffre : l'entier en très grand, le degré et la décimale à côté. */
+.dial__number {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin: 6px 0 10px;
+  font-weight: 720;
+  font-stretch: 75%;
+  transition:
+    transform 300ms var(--ease-out),
+    opacity 300ms var(--ease-out);
+}
+
+.dial[data-drag="y"] .dial__number {
+  transition:
+    transform 90ms linear,
+    opacity 300ms var(--ease-out);
+}
+
+.dial__number[data-dim] {
+  opacity: 0.45;
+}
+
+.dial__whole {
+  font-size: clamp(132px, 45vw, 188px);
+  line-height: 0.82;
+  letter-spacing: -0.02em;
+}
+
+.dial__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0.04em 0 0 4px;
+}
+
+.dial__degree {
+  font-size: clamp(48px, 16vw, 68px);
+  line-height: 0.9;
+}
+
+.dial__decimal {
+  font-size: clamp(40px, 13vw, 56px);
+  line-height: 0.9;
+  letter-spacing: -0.01em;
+  margin-top: 0.3em;
+}
+
+.dial__measured {
+  font-size: 17px;
+}
+
+.dial__hint {
+  margin-top: 8px;
+  min-height: 1.3em;
+  font-size: 14px;
+  color: var(--scene-soft);
+}
+
+.dial[data-drag="y"] .dial__hint {
+  color: inherit;
+  font-weight: 650;
+}
+
+/* Le curseur natif (invisible) a le focus : on le montre sur le chiffre. */
+.dial:has(#setpoint:focus-visible) .dial__number {
+  outline: 3px solid currentColor;
+  outline-offset: 8px;
+  border-radius: 20px;
+}
+
+.room__status {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 12px;
+}
+
+.room__line {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.room__conflict {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.room__send {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 1.4em;
+  font-size: 13px;
+  color: var(--scene-soft);
+}
+
+.room__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.room__send[data-kind="sending"] .room__dot,
+.room__send[data-kind="draft"] .room__dot {
+  background: #f0a43a;
+  opacity: 1;
+  animation: pulse 900ms ease-in-out infinite;
+}
+
+.room__send[data-kind="ok"] .room__dot {
+  background: #7fd38f;
+  opacity: 1;
+}
+
+.room__send[data-kind="pending"] .room__dot,
+.room__send[data-kind="confirm"] .room__dot {
+  background: #f0b45c;
+  opacity: 1;
+}
+
+.room__send[data-kind="error"] .room__dot {
+  background: #ff8a80;
+  opacity: 1;
+}
+
+.room__send[data-kind="error"],
+.room__send[data-kind="confirm"] {
+  color: inherit;
+  font-weight: 650;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* --- Tuiles : un résumé par réglage, qui ouvre ses choix --- */
+
+.tiles {
+  display: flex;
+  gap: 8px;
+}
+
+.tile {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 78px;
+  padding: 10px 8px 9px 10px;
+  border-radius: 18px;
+  border: 1.5px solid var(--glass-line);
+  background: var(--glass);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+}
+
+.tile[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.tile__icon {
+  display: grid;
+}
+
+.tile__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+}
+
+.tile__label {
+  font-size: 12px;
+  color: var(--scene-soft);
+}
+
+.tile__value {
+  font-size: 14px;
+  font-weight: 650;
+  font-stretch: 85%; /* condensé : les valeurs tiennent dans la tuile */
+  line-height: 1.1;
+  /* Deux lignes au plus (« Puissance + éco » sur un petit iPhone). */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* --- Panneaux (bas d'écran) --- */
+
+dialog.sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 90dvh;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 24px 24px 0 0;
+  background: var(--surface);
+  color: var(--ink);
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 -8px 30px rgb(5 10 15 / 0.18);
+  transition: transform 300ms var(--ease-drawer);
+}
+
+dialog.sheet[data-pulling] {
+  transition: none;
+}
+
+dialog.sheet[open] {
+  animation: sheet-in 360ms var(--ease-drawer);
+}
+
+dialog.sheet::backdrop {
+  background: rgb(5 10 15 / 0.42);
+  animation: fade-in 220ms var(--ease-out);
+}
+
+@media (min-width: 760px) {
+  dialog.sheet {
+    margin: auto;
+    border-radius: 24px;
+  }
+  dialog.sheet[open] {
+    animation: sheet-pop 220ms var(--ease-out);
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Poignée : tirer vers le bas ferme le panneau. */
+.sheet__grab {
+  height: 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+}
+
+.sheet__grab::before {
+  content: "";
+  width: 38px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.sheet__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  touch-action: none;
+}
+
+.sheet__head h2 {
+  font-size: 22px;
+}
+
+.sheet__body {
+  padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  gap: 20px;
+}
+
+.sheet--small .sheet__body {
+  gap: 12px;
+}
+
+.sheet__status {
+  min-height: 1.45em;
+  font-size: 15px;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet__status[data-kind="error"] {
+  color: var(--danger);
+  font-weight: 650;
+}
+
+.group h3 {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.group__help {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+/* --- Choix --- */
+
+.chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chips--grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.chip {
+  appearance: none;
+  min-height: 48px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 600 16px/1.1 var(--font);
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    transform 110ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+
+.chip:active {
+  transform: scale(0.96);
+}
+
+.chip--large {
+  min-height: 76px;
+  padding: 8px 4px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.chip--large svg {
+  width: 24px;
+  height: 24px;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+/* Le mode choisi prend sa couleur. */
+.chip[aria-pressed="true"][data-tone="heat"] {
+  background: var(--braise);
+  border-color: var(--braise);
+  color: var(--on-color);
+}
+.chip[aria-pressed="true"][data-tone="cool"] {
+  background: var(--glacier);
+  border-color: var(--glacier);
+  color: var(--on-color);
+}
+.chip[aria-pressed="true"][data-tone="auto"] {
+  background: var(--violet);
+  border-color: var(--violet);
+  color: var(--on-color);
+}
+.chip[aria-pressed="true"][data-tone="fan"],
+.chip[aria-pressed="true"][data-tone="dry"] {
+  background: var(--sarcelle);
+  border-color: var(--sarcelle);
+  color: var(--on-color);
+}
+
+.chip[data-confirm] {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.chip[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Boutons ronds et icônes (éditeur de programme) */
 
 .round {
   appearance: none;
@@ -214,217 +785,45 @@
   transform: scale(0.92);
 }
 
-.round[disabled],
-.pane .button[disabled] {
+.round[disabled] {
   opacity: 0.4;
   pointer-events: none;
 }
 
-.pane .button {
-  border-color: color-mix(in srgb, currentColor 45%, transparent);
-  min-height: 56px;
-}
-
-.pane .button--solid {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--lichen);
-}
-
-.pane .button svg {
-  width: 20px;
-  height: 20px;
-}
-
-.pane__status {
-  min-height: 1.45em;
-  font-size: 15px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pane__status .spinner {
-  width: 16px;
-  height: 16px;
-}
-
-.pane__status[data-kind="error"] {
-  font-weight: 650;
-}
-
-.pane__status[data-kind="confirm"] {
-  font-weight: 650;
-}
-
-.pane:not([data-active]) .pane__status[data-kind="error"] {
-  color: var(--danger);
-}
-
-.pane:not([data-active]) .pane__status[data-kind="confirm"] {
-  color: var(--warn);
-}
-
-.empty {
-  padding: 32px 16px;
-  max-width: 34em;
-}
-
-/* --- Fiche de réglages (bas d'écran) --- */
-
-dialog.sheet {
-  width: 100%;
-  max-width: 640px;
-  max-height: 90dvh;
-  margin: auto auto 0;
-  padding: 0;
-  border: 0;
-  border-radius: 22px 22px 0 0;
-  background: var(--surface);
-  color: var(--ink);
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-
-dialog.sheet[open] {
-  animation: sheet-in 280ms var(--ease-out);
-}
-
-dialog.sheet::backdrop {
-  background: rgb(5 10 15 / 0.45);
-}
-
-@media (min-width: 760px) {
-  dialog.sheet {
-    margin: auto;
-    border-radius: 22px;
-  }
-}
-
-@keyframes sheet-in {
-  from {
-    transform: translateY(32px);
-    opacity: 0;
-  }
-}
-
-.sheet__head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 16px 12px 20px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-}
-
-.sheet__head h2 {
-  font-size: 24px;
-}
-
-.sheet__body {
-  padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px));
-  display: grid;
-  gap: 24px;
-}
-
-.sheet--small .sheet__body {
-  gap: 12px;
-}
-
-.sheet__status {
-  min-height: 1.45em;
-  font-size: 15px;
-  color: var(--ink-2);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sheet__status[data-kind="error"] {
-  color: var(--danger);
-  font-weight: 650;
-}
-
-.group h3 {
-  font-size: 18px;
-  margin-bottom: 10px;
-}
-
-.group__help {
-  margin-top: 8px;
-  font-size: 15px;
-  color: var(--ink-2);
-}
-
-.chips {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.chips--compact {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.chips--positions {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 8px;
-}
-
-.chip {
+.icon-button {
   appearance: none;
-  min-height: 48px;
-  padding: 0 10px;
-  border-radius: 12px;
-  border: 1.5px solid var(--line);
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
   background: transparent;
-  color: var(--ink);
-  font: 600 16px/1.1 var(--font);
+  color: inherit;
+  display: grid;
+  place-items: center;
   cursor: pointer;
   touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-  transition:
-    transform 110ms var(--ease-out),
-    background-color 160ms var(--ease-out);
+  transition: transform 120ms var(--ease-out);
 }
 
-.chip:active {
-  transform: scale(0.96);
+.icon-button:active {
+  transform: scale(0.92);
 }
 
-.chip[aria-pressed="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--surface);
+.icon-button svg {
+  width: 22px;
+  height: 22px;
 }
 
-.chip[data-confirm] {
-  border-color: var(--warn);
-  color: var(--warn);
+@media (hover: hover) and (pointer: fine) {
+  .icon-button:hover,
+  .tool:hover,
+  .tile:hover,
+  .ribbon:hover {
+    filter: brightness(1.06);
+  }
 }
 
-.chip[disabled] {
-  opacity: 0.45;
-  pointer-events: none;
-}
-
-.stepper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.stepper__value {
-  font-size: 56px;
-  font-weight: 720;
-  font-stretch: 75%;
-  letter-spacing: -0.03em;
-}
+/* Options (interrupteurs) */
 
 .option {
   display: flex;
@@ -503,12 +902,6 @@ dialog.sheet::backdrop {
 }
 
 /* --- Programme --- */
-
-.pane__program {
-  margin-top: 6px;
-  font-size: 15px;
-  font-weight: 550;
-}
 
 .program__edit,
 .program__add {
@@ -626,37 +1019,38 @@ dialog.sheet::backdrop {
 
 /* --- Absence --- */
 
-.absence-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  font-size: 15px;
-  font-weight: 550;
-  background: var(--surface-2);
-}
-
-.absence-banner p {
-  flex: 1;
-}
-
 .field input[type="datetime-local"] {
   min-height: 48px;
 }
 
+/* --- Moins de mouvement --- */
+
 @media (prefers-reduced-motion: reduce) {
-  .pane,
-  .setpoint,
+  .scene,
+  .level,
+  .dial__number,
+  .tab,
+  .tool,
+  .ribbon,
+  .tile,
   .round,
   .chip,
   .switch,
-  .switch::after {
-    transition: none;
+  .switch::after,
+  dialog.sheet {
+    transition-property: opacity, background-color, color;
   }
-  dialog.sheet[open] {
+  .wave {
     animation: none;
   }
-  .icon-button[aria-busy="true"] svg {
-    animation-duration: 2700ms;
+  body:has(dialog[open]) .scene {
+    transform: none;
+    border-radius: 0;
+  }
+  dialog.sheet[open] {
+    animation: fade-in 160ms var(--ease-out);
+  }
+  .room__send .room__dot {
+    animation: none;
   }
 }

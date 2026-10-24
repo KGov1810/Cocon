@@ -18,7 +18,6 @@ import {
   rubberBand,
   setpointFromDrag,
   splitTemperature,
-  stepSetpoint,
   validateDraft,
   waveLevel,
 } from "../public/assets/logic.js";
@@ -50,22 +49,6 @@ describe("formats", () => {
       describeOutcome({ status: "pending", elapsedMs: 9000 }),
       "Envoyé. Atlantic n'a pas encore confirmé, l'affichage se mettra à jour.",
     );
-  });
-});
-
-describe("consigne", () => {
-  it("avance d'un pas dans les bornes", () => {
-    assert.equal(stepSetpoint(room(), +1), 21.5);
-    assert.equal(stepSetpoint(room(), -1), 20.5);
-  });
-
-  it("reste dans les bornes", () => {
-    assert.equal(stepSetpoint(room({ setpoint: 30 }), +1), 30);
-    assert.equal(stepSetpoint(room({ setpoint: 16 }), -1), 16);
-  });
-
-  it("n'a pas de consigne sans plage (ventilation)", () => {
-    assert.equal(stepSetpoint(room({ mode: "fan", setpoint: null, setpointRange: null }), +1), null);
   });
 });
 

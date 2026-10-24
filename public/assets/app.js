@@ -1,27 +1,22 @@
 /**
- * Tableau de bord Cocon : une pièce par panneau, une fiche de réglages par pièce.
+ * Tableau de bord Cocon : une pièce à la fois, réglée au doigt, et des panneaux
+ * de réglages (mode, vitesse, volets, options, programme) ouverts par les tuiles.
  *
  * - L'état vient de GET /api/state, relu toutes les 20 s quand l'appli est
  *   visible (et aussitôt quand on y revient).
  * - Chaque commande part vers POST /api/rooms/<id>. La valeur demandée s'affiche
  *   tout de suite ; elle reste affichée jusqu'à ce qu'Atlantic la renvoie (90 s max).
- * - Une seule commande à la fois par pièce ; la consigne part 1,2 s après le
- *   dernier appui sur + ou −.
+ * - Une seule commande à la fois par pièce. La consigne part quand le doigt se
+ *   lève ; au clavier ou avec VoiceOver, 1,2 s après le dernier réglage.
  */
 
 import { api, el } from "./api.js";
-import {
-  applyOptimistic,
-  conflictWith,
-  describeOutcome,
-  formatTemperature,
-  powerOnMode,
-  stepSetpoint,
-} from "./logic.js";
+import { applyOptimistic, conflictWith, describeOutcome, optionsSummary, powerOnMode, rubberBand } from "./logic.js";
 import { createSignin, signOut } from "./session.js";
 import { chip, icon, option } from "./ui.js";
 import { editorView, openEditor, programGroup, programLine, reloadEditor } from "./program-editor.js";
 import { absenceText, absenceView, newAbsenceForm } from "./absence-view.js";
+import { canAdjust, createRoomView } from "./room-view.js";
 
 const POLL_MS = 20_000;
 const OPTIMISTIC_MS = 90_000;
@@ -37,9 +32,15 @@ const MODE_LABEL = {
   dry: "Déshumidification",
   unknown: "État inconnu",
 };
+const MODE_SHORT = { ...MODE_LABEL, dry: "Déshum.", fan: "Ventil." };
+// Valeurs des tuiles : courtes, pour tenir sur une ligne.
+const MODE_TILE = { ...MODE_SHORT, heat: "Chaud", unknown: "—" };
 const MODE_ORDER = ["heat", "cool", "auto", "dry", "fan", "off"];
 const FAN_LABEL = { auto: "Auto", low: "Basse", medium: "Moyenne", high: "Haute", quiet: "Silence" };
-const ADJUSTABLE = new Set(["heat", "cool", "auto", "dry"]);
+const FAN_ICON = { auto: "auto", low: "low", medium: "medium", high: "high", quiet: "quiet" };
+const SHEET_TITLE = { mode: "Mode", fan: "Vitesse", louver: "Volets", options: "Options", program: "Programme" };
+// Couleur de la barre d'état de l'iPhone : celle du haut de l'écran.
+const SCENE_COLOR = { heat: "#c93c17", cool: "#1d62b0", auto: "#5e43c2", fan: "#0d6e63", dry: "#0d6e63" };
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,10 +55,13 @@ const state = {
   optimistic: new Map(), // id → { champ: { value, until } }
   busy: new Set(), // pièces dont une commande est en cours
   status: new Map(), // id → { kind, text, at }
-  drafts: new Map(), // id → minuterie de la consigne en cours de réglage
+  drafts: new Map(), // id → minuterie de la consigne en cours de réglage (clavier, VoiceOver)
   confirmMode: null, // { id, mode } : mode en conflit qui attend une confirmation
-  sheetRoom: null, // pièce dont la fiche est ouverte
-  editor: null, // éditeur de programme ouvert dans la fiche (voir program-editor.js)
+  active: null, // pièce affichée
+  enter: null, // côté d'où arrive la pièce après un changement
+  sheetRoom: null, // pièce dont un panneau est ouvert
+  sheetKind: null, // "mode" | "fan" | "louver" | "options" | "program"
+  editor: null, // éditeur de programme ouvert dans le panneau (voir program-editor.js)
   absence: null, // état de l'absence renvoyé par le relais
   absenceForm: null, // formulaire de la fiche Absence
   absenceBusy: false,
@@ -66,23 +70,29 @@ const state = {
 
 const roomById = (id) => state.view.find((r) => r.id === id);
 
-/* Dernier mode utilisé par pièce : simple confort, propre à ce téléphone. */
-function rememberMode(id, mode) {
-  if (!mode || mode === "off" || mode === "unknown") return;
+/* Confort propre à ce téléphone : dernier mode par pièce, dernière pièce affichée. */
+function remember(key, value) {
   try {
-    localStorage.setItem(`cocon.lastMode.${id}`, mode);
+    localStorage.setItem(key, value);
   } catch {
-    /* stockage indisponible : on retombera sur la saison */
+    /* stockage indisponible : on retombera sur les valeurs par défaut */
   }
 }
 
-function rememberedMode(id) {
+function recall(key) {
   try {
-    return localStorage.getItem(`cocon.lastMode.${id}`);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
+
+function rememberMode(id, mode) {
+  if (!mode || mode === "off" || mode === "unknown") return;
+  remember(`cocon.lastMode.${id}`, mode);
+}
+
+const rememberedMode = (id) => recall(`cocon.lastMode.${id}`);
 
 function setOptimistic(id, patch) {
   const until = Date.now() + OPTIMISTIC_MS;
@@ -157,29 +167,42 @@ async function send(room, setting, value, patch) {
   }
 }
 
-/** + / − : la consigne s'affiche aussitôt et part après le dernier appui. */
-function nudge(id, direction) {
+/** Doigt levé : la consigne part tout de suite. */
+function commitSetpoint(id, value) {
+  const room = roomById(id);
+  if (!room) return;
+  clearTimeout(state.drafts.get(id));
+  state.drafts.delete(id);
+  if (state.busy.has(id)) {
+    setStatus(id, "error", "Une commande est déjà en cours pour cette pièce : réessayez dans un instant.");
+    return render();
+  }
+  if (value !== room.setpoint) send(room, "setpoint", value, { setpoint: value });
+  else render();
+}
+
+/** Curseur natif (clavier, VoiceOver) : la consigne part après le dernier réglage. */
+function draftSetpoint(id, value) {
   const room = roomById(id);
   if (!room || state.busy.has(id)) return;
-  const next = stepSetpoint(room, direction);
-  if (next === null || next === room.setpoint) return;
-  setOptimistic(id, { setpoint: next });
-  setStatus(id, "draft", `Consigne ${formatTemperature(next)}, envoi dans un instant…`);
+  setOptimistic(id, { setpoint: value });
+  setStatus(id, "draft", "Envoi dans un instant…");
   clearTimeout(state.drafts.get(id));
   state.drafts.set(
     id,
     setTimeout(() => {
       state.drafts.delete(id);
       const current = roomById(id);
-      if (current) send(current, "setpoint", next, { setpoint: next });
+      if (current) send(current, "setpoint", value, { setpoint: value });
     }, SETPOINT_DEBOUNCE_MS),
   );
   render();
 }
 
+/** Renvoie true si la commande est partie (et non en attente de confirmation). */
 function chooseMode(id, mode) {
   const room = roomById(id);
-  if (!room || room.mode === mode) return;
+  if (!room || room.mode === mode) return true;
   const conflict = conflictWith(state.view, id, mode);
   const confirmed = state.confirmMode?.id === id && state.confirmMode.mode === mode;
   if (conflict && !confirmed) {
@@ -190,9 +213,10 @@ function chooseMode(id, mode) {
       `${conflict.name} est en ${MODE_LABEL[conflict.mode].toLowerCase()} : touchez à nouveau pour passer quand même en ${MODE_LABEL[mode].toLowerCase()}.`,
     );
     render();
-    return;
+    return false;
   }
   send(room, "mode", mode, { mode });
+  return true;
 }
 
 function togglePower(id) {
@@ -200,145 +224,195 @@ function togglePower(id) {
   if (!room) return;
   if (room.mode !== "off") return send(room, "mode", "off", { mode: "off" });
   const mode = powerOnMode(room, rememberedMode(id), new Date().getMonth());
-  if (mode) chooseMode(id, mode);
+  if (!mode) return;
+  // En conflit, la confirmation se fait dans le panneau Mode.
+  if (conflictWith(state.view, id, mode)) openSheet(id, "mode");
+  chooseMode(id, mode);
 }
 
-/* ---------- Panneaux ---------- */
+function selectRoom(id, from) {
+  if (id === state.active) return;
+  state.active = id;
+  state.enter = from;
+  remember("cocon.room", String(id));
+  render();
+  state.enter = null;
+}
 
-const panes = new Map(); // id → { node, update(room) }
+/* ---------- Écran de la pièce ---------- */
 
-function createPane(id) {
-  const name = el("h2", { class: "pane__name", id: `room-${id}` });
-  const stateLabel = el("p", { class: "pane__state" });
-  const setpoint = el("p", { class: "setpoint" });
-  const measured = el("p", { class: "measured" });
-  const programInfo = el("p", { class: "pane__program" });
-  const note = el("p", { class: "pane__note" });
+const roomView = createRoomView({
+  onSelect: selectRoom,
+  onCommit: commitSetpoint,
+  onDraft: draftSetpoint,
+  onOpen: openSheet,
+});
 
-  const minus = el("button", { class: "round", type: "button", onclick: () => nudge(id, -1) }, icon("minus"));
-  const plus = el("button", { class: "round", type: "button", onclick: () => nudge(id, +1) }, icon("plus"));
-  const off = el("button", { class: "round", type: "button", onclick: () => togglePower(id) }, icon("power"));
-  const on = el("button", { class: "button button--solid", type: "button", onclick: () => togglePower(id) }, [
-    icon("power"),
-    el("span"),
-  ]);
-  const settings = el("button", { class: "button", type: "button", onclick: () => openSheet(id) }, [
-    icon("sliders"),
-    "Réglages",
-  ]);
-  const status = el("p", { class: "pane__status", "aria-live": "polite" });
-
-  const node = el("section", { class: "pane", "aria-labelledby": `room-${id}` }, [
-    el("div", { class: "pane__head" }, [name, stateLabel]),
-    el("div", { class: "pane__body" }, [setpoint, measured, programInfo, note]),
-    el("div", {}, [
-      el("div", { class: "pane__controls" }, [minus, plus, off, on, el("span", { class: "spacer" }), settings]),
-      status,
-    ]),
-  ]);
-
-  function update(room) {
-    const busy = state.busy.has(id);
-    const active = room.available && room.mode !== "off" && room.mode !== "unknown";
-    node.dataset.mode = room.available ? room.mode : "off";
-    node.toggleAttribute("data-active", active);
-
-    name.textContent = room.name;
-    stateLabel.textContent = room.available ? MODE_LABEL[room.mode] : "Hors ligne";
-
-    // Le grand chiffre : la consigne (ou, en ventilation seule, la température).
-    if (room.mode === "fan") {
-      setpoint.textContent = formatTemperature(room.temperature);
-      measured.textContent = "Ventilation seule, sans consigne";
-    } else {
-      setpoint.textContent = formatTemperature(room.setpoint);
-      measured.textContent =
-        room.temperature !== null
-          ? `Il fait ${formatTemperature(room.temperature)} dans la pièce`
-          : "Température de la pièce indisponible";
+/** Texte de la ligne d'état de la pièce. */
+function describeRoom(room) {
+  const t = room.temperature;
+  if (!room.available) return "Unité injoignable : vérifiez le hub Cozytouch.";
+  if (absentNow()) return "Arrêtée pendant l'absence";
+  switch (room.mode) {
+    case "heat":
+      return t !== null && t >= room.setpoint ? "Consigne atteinte, l'unité ralentit" : "Chauffe pour atteindre la consigne";
+    case "cool":
+      return t !== null && t <= room.setpoint ? "Consigne atteinte, l'unité ralentit" : "Refroidit pour atteindre la consigne";
+    case "auto":
+      return "Chauffe ou refroidit selon la pièce";
+    case "dry":
+      return "Déshumidifie la pièce";
+    case "fan":
+      return "Ventilation seule, sans consigne";
+    case "unknown":
+      return "État inconnu : actualisez dans un instant";
+    default: {
+      const onMode = powerOnMode(room, rememberedMode(room.id), new Date().getMonth());
+      return onMode ? `À l'arrêt · se rallumera en ${MODE_LABEL[onMode].toLowerCase()}` : "À l'arrêt";
     }
-    setpoint.toggleAttribute("data-draft", state.drafts.has(id));
-    if (room.mode === "fan" || room.setpoint === null) setpoint.removeAttribute("aria-label");
-    else setpoint.setAttribute("aria-label", `Consigne ${formatTemperature(room.setpoint).replace("°", " degrés")}`);
+  }
+}
 
-    const line = room.available ? programLine(room) : null;
-    programInfo.hidden = !line;
-    programInfo.textContent = line ?? "";
+const absentNow = () => state.absence?.status === "on";
 
-    const conflict = active ? conflictWith(state.view, id, room.mode) : null;
-    note.hidden = !conflict;
-    if (conflict) {
-      note.textContent = `${conflict.name} est en ${MODE_LABEL[conflict.mode].toLowerCase()} : une seule unité extérieure ne peut pas chauffer et refroidir en même temps.`;
-    }
-
-    const adjustable = active && ADJUSTABLE.has(room.mode) && room.setpointRange;
-    minus.hidden = plus.hidden = !adjustable;
-    minus.disabled = plus.disabled = busy;
-    minus.setAttribute("aria-label", `Baisser la consigne de ${room.name}`);
-    plus.setAttribute("aria-label", `Monter la consigne de ${room.name}`);
-
-    off.hidden = !active;
-    off.disabled = busy;
-    off.setAttribute("aria-label", `Éteindre ${room.name}`);
-
-    const onMode = powerOnMode(room, rememberedMode(id), new Date().getMonth());
-    on.hidden = active || !room.available || !onMode;
-    on.disabled = busy;
-    on.lastChild.textContent = "Allumer";
-    on.setAttribute("aria-label", onMode ? `Allumer ${room.name} en ${MODE_LABEL[onMode].toLowerCase()}` : `Allumer ${room.name}`);
-
-    settings.disabled = !room.available;
-    settings.setAttribute("aria-label", `Réglages de ${room.name}`);
-
-    const current = state.status.get(id);
-    const visible = current && (current.kind === "sending" || current.kind === "draft" || Date.now() - current.at < STATUS_VISIBLE_MS);
-    let idle = "";
-    if (!room.available) idle = "Unité injoignable : vérifiez le hub Cozytouch.";
-    else if (!active && onMode) idle = `Se rallumera en ${MODE_LABEL[onMode].toLowerCase()}`;
-    status.dataset.kind = visible ? current.kind : "";
-    status.replaceChildren(
-      ...(visible && (current.kind === "sending" || current.kind === "draft")
-        ? [el("span", { class: "spinner", "aria-hidden": "true" })]
-        : []),
-      visible ? current.text : idle,
-    );
+function renderRoom() {
+  const has = state.view.length > 0;
+  $("loading").hidden = state.updatedAt !== null || Boolean(state.error);
+  $("empty").hidden = state.updatedAt === null || has;
+  for (const id of ["dial", "room-status", "tiles"]) $(id).hidden = !has;
+  if (!has) {
+    $("app").dataset.mode = "off";
+    $("ribbon").hidden = true;
+    $("power").hidden = true;
+    return updateThemeColor(null);
   }
 
-  return { node, update };
+  if (!roomById(state.active)) {
+    const stored = Number(recall("cocon.room"));
+    state.active = roomById(stored) ? stored : state.view[0].id;
+  }
+  const room = roomById(state.active);
+  const id = room.id;
+  const on = room.available && room.mode !== "off" && room.mode !== "unknown";
+
+  let idleHint = "";
+  if (canAdjust(room)) idleHint = state.view.length > 1 ? "Glissez ↕ pour régler · ↔ pour changer de pièce" : "Glissez vers le haut ou le bas pour régler";
+  else if (state.view.length > 1) idleHint = "Glissez ↔ pour changer de pièce";
+
+  roomView.update({
+    rooms: state.view,
+    room,
+    enter: state.enter,
+    absent: absentNow(),
+    idleHint,
+    labels: { mode: MODE_SHORT, tile: MODE_TILE, fan: FAN_LABEL, options: optionsSummary(room) },
+  });
+
+  // Marche / arrêt de la pièce affichée.
+  const power = $("power");
+  power.hidden = !room.available;
+  power.disabled = state.busy.has(id);
+  power.setAttribute("aria-pressed", on ? "true" : "false");
+  power.setAttribute("aria-label", on ? `Éteindre : ${room.name}` : `Allumer : ${room.name}`);
+
+  // Bandeau : absence en cours, sinon programme de la pièce.
+  const ribbon = $("ribbon");
+  const absence = absenceText(state.absence);
+  let ribbonText = null;
+  let ribbonIcon = "calendar";
+  if (absence) {
+    ribbonText = absence;
+    ribbonIcon = "bag";
+  } else if (room.program && room.available) {
+    ribbonText = programLine(room) ?? "Programme désactivé · le régler";
+    ribbonIcon = room.program.override?.active ? "clock" : "calendar";
+  }
+  ribbon.hidden = !ribbonText;
+  $("ribbon-text").textContent = ribbonText ?? "";
+  ribbon.dataset.kind = absence ? "absence" : "program";
+  if (ribbon.dataset.icon !== ribbonIcon) {
+    ribbon.dataset.icon = ribbonIcon;
+    $("ribbon-icon").replaceChildren(icon(ribbonIcon));
+  }
+
+  // Ligne d'état, conflit multi-split, retour de commande.
+  $("status-line").textContent = describeRoom(room);
+  const conflict = on && !absentNow() ? conflictWith(state.view, id, room.mode) : null;
+  $("conflict-line").hidden = !conflict;
+  $("conflict-line").textContent = conflict
+    ? `${conflict.name} est en ${MODE_LABEL[conflict.mode].toLowerCase()} : une seule unité extérieure ne peut pas chauffer et refroidir en même temps.`
+    : "";
+
+  const current = state.status.get(id);
+  const visible = current && (current.kind === "sending" || current.kind === "draft" || Date.now() - current.at < STATUS_VISIBLE_MS);
+  const updated = state.updatedAt
+    ? `À jour à ${new Date(state.updatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · vague estimée d'après vos réglages`
+    : "";
+  const sendLine = $("send-line");
+  sendLine.dataset.kind = visible ? current.kind : "";
+  sendLine.replaceChildren(
+    el("span", { class: "room__dot", "aria-hidden": "true" }),
+    visible ? current.text : updated,
+  );
+
+  updateThemeColor(on && !absentNow() ? SCENE_COLOR[room.mode] : null);
 }
 
-/* ---------- Fiche de réglages ---------- */
+/* La barre d'état prend la couleur du haut de l'écran ; à l'arrêt, celle du thème. */
+const themeMetas = [...document.querySelectorAll('meta[name="theme-color"]')].map((meta) => ({ meta, base: meta.content }));
+function updateThemeColor(color) {
+  for (const { meta, base } of themeMetas) meta.content = color ?? base;
+}
+
+/* ---------- Panneaux de réglages ---------- */
 
 const sheet = $("sheet");
 
 let sheetSignature = null;
 
+function sheetHead(title, onClose) {
+  return el("div", { class: "sheet__head" }, [
+    el("h2", { id: "sheet-title" }, title),
+    el("span", { class: "spacer" }),
+    el("button", { class: "button button--quiet", type: "button", onclick: onClose }, "Fermer"),
+  ]);
+}
+
+const grab = () => el("div", { class: "sheet__grab", "aria-hidden": "true" });
+
+/** Choix qui ferme le panneau une fois envoyé. */
+function sendAndClose(room, setting, value, patch) {
+  send(room, setting, value, patch);
+  sheet.close();
+}
+
 function renderSheet() {
   const room = roomById(state.sheetRoom);
   if (!room) return sheet.open && sheet.close();
   const id = room.id;
+  const kind = state.sheetKind;
   const busy = state.busy.has(id) || !room.available;
   const current = state.status.get(id);
 
-  // On ne reconstruit la fiche que si son contenu change (le rafraîchissement
+  // On ne reconstruit le panneau que si son contenu change (le rafraîchissement
   // toutes les 20 s ne doit pas voler un appui en cours).
-  const signature = JSON.stringify([room, busy, current, state.confirmMode, state.editor, state.view.map((r) => r.mode)]);
+  const signature = JSON.stringify([kind, room, busy, current, state.confirmMode, state.editor, state.view.map((r) => r.mode)]);
   if (signature === sheetSignature && sheet.childElementCount) return;
   sheetSignature = signature;
 
-  // L'encadré d'alerte remplace le message de confirmation dans la fiche.
+  // L'encadré d'alerte remplace le message de confirmation dans le panneau.
   const visible =
     current &&
     current.kind !== "confirm" &&
     (current.kind === "sending" || current.kind === "draft" || Date.now() - current.at < STATUS_VISIBLE_MS);
-  const status = el("p", { class: "sheet__status", "aria-live": "polite", "data-kind": visible ? current.kind : "" }, [
+  const status = el("p", { class: "sheet__status", "aria-live": "polite", "data-kind": visible ? current.kind : "", hidden: !visible && room.available }, [
     visible && (current.kind === "sending" || current.kind === "draft")
       ? el("span", { class: "spinner", "aria-hidden": "true" })
       : null,
-    visible ? current.text : room.available ? `${MODE_LABEL[room.mode]}, ${room.temperature !== null ? `il fait ${formatTemperature(room.temperature)}` : "température indisponible"}` : "Unité hors ligne : réglages indisponibles.",
+    visible ? current.text : room.available ? null : "Unité hors ligne : réglages indisponibles.",
   ]);
 
-  if (state.editor?.roomId === id && room.program) {
+  if (kind === "program" && state.editor?.roomId === id && room.program) {
     const view = editorView(room, state.editor, {
       busy,
       status,
@@ -359,70 +433,107 @@ function renderSheet() {
         renderSheet();
       },
     });
-    sheet.replaceChildren(view.head, el("div", { class: "sheet__body" }, view.body));
+    sheet.replaceChildren(grab(), view.head, el("div", { class: "sheet__body" }, view.body));
     return;
   }
 
-  const groups = [];
+  const body = [status];
 
-  const pending = state.confirmMode?.id === id ? state.confirmMode.mode : null;
-  const conflict = pending ? conflictWith(state.view, id, pending) : null;
-  if (conflict) {
-    groups.push(
-      el(
-        "p",
-        { class: "warning", role: "alert" },
-        `${conflict.name} est en ${MODE_LABEL[conflict.mode].toLowerCase()}. Avec une seule unité extérieure, l'une des deux pièces restera en attente. Touchez à nouveau « ${MODE_LABEL[pending]} » pour confirmer.`,
-      ),
-    );
-  }
-
-  groups.push(
-    el("section", { class: "group" }, [
-      el("h3", {}, "Mode"),
+  if (kind === "mode") {
+    const pending = state.confirmMode?.id === id ? state.confirmMode.mode : null;
+    const conflict = pending ? conflictWith(state.view, id, pending) : null;
+    if (conflict) {
+      body.push(
+        el(
+          "p",
+          { class: "warning", role: "alert" },
+          `${conflict.name} est en ${MODE_LABEL[conflict.mode].toLowerCase()}. Avec une seule unité extérieure, l'une des deux pièces restera en attente. Touchez à nouveau « ${MODE_SHORT[pending]} » pour confirmer.`,
+        ),
+      );
+    }
+    body.push(
       el(
         "div",
-        { class: "chips" },
+        { class: "chips chips--grid" },
         MODE_ORDER.filter((m) => room.modes.includes(m)).map((mode) =>
-          chip(MODE_LABEL[mode], {
+          chip(MODE_SHORT[mode], {
+            iconName: mode,
+            tone: mode,
             pressed: room.mode === mode,
             confirm: pending === mode,
             disabled: busy,
-            onclick: () => chooseMode(id, mode),
+            onclick: () => {
+              if (room.mode === mode) return sheet.close();
+              if (chooseMode(id, mode)) sheet.close();
+            },
           }),
         ),
       ),
-    ]),
-  );
-
-  if (ADJUSTABLE.has(room.mode) && room.setpointRange) {
-    groups.push(
-      el("section", { class: "group" }, [
-        el("h3", {}, "Consigne"),
-        el("div", { class: "stepper" }, [
-          el(
-            "button",
-            { class: "round", type: "button", "aria-label": "Baisser la consigne", disabled: busy, onclick: () => nudge(id, -1) },
-            icon("minus"),
-          ),
-          el("span", { class: "stepper__value", "aria-live": "polite" }, formatTemperature(room.setpoint)),
-          el(
-            "button",
-            { class: "round", type: "button", "aria-label": "Monter la consigne", disabled: busy, onclick: () => nudge(id, +1) },
-            icon("plus"),
-          ),
-        ]),
-        el(
-          "p",
-          { class: "group__help" },
-          `De ${formatTemperature(room.setpointRange.min)} à ${formatTemperature(room.setpointRange.max)}, par pas de ${formatTemperature(room.setpointRange.step)}`,
-        ),
-      ]),
+      el("p", { class: "group__help" }, `Ne change que la pièce « ${room.name} ».`),
     );
   }
 
-  if (room.program) {
-    groups.push(
+  if (kind === "fan" && room.fanSpeeds?.length) {
+    body.push(
+      el(
+        "div",
+        { class: "chips chips--grid" },
+        room.fanSpeeds.map((speed) =>
+          chip(FAN_LABEL[speed], {
+            iconName: FAN_ICON[speed] ?? "speed",
+            pressed: room.fan === speed,
+            disabled: busy,
+            onclick: () => (room.fan === speed ? sheet.close() : sendAndClose(room, "fan", speed, { fan: speed })),
+          }),
+        ),
+      ),
+      el("p", { class: "group__help" }, "Silence réduit le bruit de l'unité intérieure."),
+    );
+  }
+
+  if (kind === "louver" && room.louvers?.length) {
+    const positions = room.louvers.filter((l) => l !== "swing");
+    const choices = [...(room.louvers.includes("swing") ? ["swing"] : []), ...positions];
+    body.push(
+      el(
+        "div",
+        { class: "chips chips--grid" },
+        choices.map((louver) =>
+          chip(louver === "swing" ? "Balayage" : `Position ${louver}`, {
+            iconName: louver === "swing" ? "swing" : `louver${louver}`,
+            pressed: room.louver === louver,
+            disabled: busy,
+            onclick: () => (room.louver === louver ? sheet.close() : sendAndClose(room, "louver", louver, { louver })),
+          }),
+        ),
+      ),
+      el("p", { class: "group__help" }, `Position 1 : souffle vers le haut. Position ${positions.length} : vers le bas.`),
+    );
+  }
+
+  if (kind === "options") {
+    if (room.powerful !== undefined) {
+      body.push(
+        option("Pleine puissance", "Souffle au maximum pour atteindre la consigne plus vite.", room.powerful, busy, () =>
+          send(room, "powerful", !room.powerful, { powerful: !room.powerful }),
+        ),
+      );
+    }
+    if (room.economy !== undefined) {
+      body.push(
+        option(
+          "Économie d'énergie",
+          "Limite la puissance de l'unité pour consommer moins. Coupez-la pour chauffer ou refroidir plus vite.",
+          room.economy,
+          busy,
+          () => send(room, "economy", !room.economy, { economy: !room.economy }),
+        ),
+      );
+    }
+  }
+
+  if (kind === "program" && room.program) {
+    body.push(
       programGroup(room, {
         busy,
         onToggle: (follow) => send(room, "program", follow),
@@ -434,91 +545,18 @@ function renderSheet() {
     );
   }
 
-  if (room.fanSpeeds?.length) {
-    groups.push(
-      el("section", { class: "group" }, [
-        el("h3", {}, "Ventilation"),
-        el(
-          "div",
-          { class: "chips chips--compact" },
-          room.fanSpeeds.map((speed) =>
-            chip(FAN_LABEL[speed], {
-              pressed: room.fan === speed,
-              disabled: busy,
-              onclick: () => room.fan !== speed && send(room, "fan", speed, { fan: speed }),
-            }),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  if (room.louvers?.length) {
-    const positions = room.louvers.filter((l) => l !== "swing");
-    groups.push(
-      el("section", { class: "group" }, [
-        el("h3", {}, "Volets"),
-        room.louvers.includes("swing")
-          ? chip("Balayage", {
-              pressed: room.louver === "swing",
-              disabled: busy,
-              onclick: () => room.louver !== "swing" && send(room, "louver", "swing", { louver: "swing" }),
-            })
-          : null,
-        el(
-          "div",
-          { class: "chips chips--positions" },
-          positions.map((position) =>
-            chip(position, {
-              pressed: room.louver === position,
-              disabled: busy,
-              onclick: () => room.louver !== position && send(room, "louver", position, { louver: position }),
-            }),
-          ),
-        ),
-        el(
-          "p",
-          { class: "group__help" },
-          `Position fixe, de 1 (le plus haut) à ${positions.length} (le plus bas).`,
-        ),
-      ]),
-    );
-  }
-
-  const options = [];
-  if (room.powerful !== undefined) {
-    options.push(
-      option("Pleine puissance", "L'unité fonctionne à sa puissance maximale.", room.powerful, busy, () =>
-        send(room, "powerful", !room.powerful, { powerful: !room.powerful }),
-      ),
-    );
-  }
-  if (room.economy !== undefined) {
-    options.push(
-      option(
-        "Économie d'énergie",
-        "Limite la puissance de l'unité pour consommer moins. Coupez-la pour chauffer ou refroidir plus vite.",
-        room.economy,
-        busy,
-        () => send(room, "economy", !room.economy, { economy: !room.economy }),
-      ),
-    );
-  }
-  if (options.length) groups.push(el("section", { class: "group" }, [el("h3", {}, "Options"), ...options]));
-
   sheet.replaceChildren(
-    el("div", { class: "sheet__head" }, [
-      el("h2", { id: "sheet-title" }, room.name),
-      el("span", { class: "spacer" }),
-      el("button", { class: "button button--quiet", type: "button", onclick: () => sheet.close() }, "Fermer"),
-    ]),
-    el("div", { class: "sheet__body" }, [status, ...groups]),
+    grab(),
+    sheetHead(`${SHEET_TITLE[kind]} · ${room.name}`, () => sheet.close()),
+    el("div", { class: "sheet__body" }, body),
   );
 }
 
-function openSheet(id) {
+function openSheet(id, kind) {
   state.sheetRoom = id;
+  state.sheetKind = kind;
   state.confirmMode = null;
+  state.editor = null;
   sheetSignature = null;
   renderSheet();
   if (!sheet.open) sheet.showModal();
@@ -526,15 +564,59 @@ function openSheet(id) {
 
 sheet.addEventListener("close", () => {
   state.sheetRoom = null;
+  state.sheetKind = null;
   state.confirmMode = null;
   state.editor = null;
+  render();
 });
 
-// Toucher le fond assombri ferme la fiche.
-for (const dialog of [sheet, $("more"), $("absence")]) {
+/**
+ * Fermeture des panneaux : toucher le fond assombri, ou tirer la poignée (ou
+ * l'en-tête) vers le bas. Un geste ample ou un coup sec suffit.
+ */
+function enableDismiss(dialog) {
+  let pull = null;
+  let pulled = false; // un geste vient d'avoir lieu : le « click » qui suit ne compte pas
+
   dialog.addEventListener("click", (event) => {
+    if (pulled) {
+      pulled = false;
+      return;
+    }
     if (event.target === dialog) dialog.close();
   });
+
+  dialog.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest(".sheet__grab, .sheet__head") || event.target.closest("button, a, input, select")) return;
+    pull = { id: event.pointerId, y: event.clientY, t: event.timeStamp, moving: false };
+  });
+  dialog.addEventListener("pointermove", (event) => {
+    if (!pull || event.pointerId !== pull.id) return;
+    const dy = event.clientY - pull.y;
+    // On ne prend la main qu'au-delà de quelques pixels : un simple appui reste un appui.
+    if (!pull.moving && Math.abs(dy) < 6) return;
+    if (!pull.moving) {
+      pull.moving = true;
+      dialog.setPointerCapture(event.pointerId);
+      dialog.dataset.pulling = "";
+    }
+    dialog.style.transform = `translateY(${(dy >= 0 ? dy : rubberBand(dy, 400)).toFixed(1)}px)`;
+  });
+  const end = (event, cancelled) => {
+    if (!pull || event.pointerId !== pull.id) return;
+    const { moving, y, t } = pull;
+    pull = null;
+    if (!moving) return;
+    pulled = true;
+    setTimeout(() => (pulled = false), 0); // pas de « click » après ce geste : on oublie
+    const dy = event.clientY - y;
+    const speed = dy / Math.max(1, event.timeStamp - t);
+    delete dialog.dataset.pulling;
+    dialog.style.transform = "";
+    if (!cancelled && (dy > 110 || (dy > 20 && speed > 0.3))) dialog.close();
+  };
+  dialog.addEventListener("pointerup", (event) => end(event, false));
+  dialog.addEventListener("pointercancel", (event) => end(event, true));
 }
 
 /* ---------- Absence ---------- */
@@ -558,7 +640,7 @@ function renderAbsence() {
     onCancelAbsence: () => sendAbsence(null),
     onClose: () => absenceDialog.close(),
   });
-  absenceDialog.replaceChildren(view.head, el("div", { class: "sheet__body" }, view.body));
+  absenceDialog.replaceChildren(grab(), view.head, el("div", { class: "sheet__body" }, view.body));
 }
 
 function openAbsence() {
@@ -600,37 +682,15 @@ function render() {
     state.editor = room?.program ? reloadEditor(room, state.editor) : null;
   }
 
-  const container = $("rooms");
-  if (state.updatedAt === null) {
-    $("loading").hidden = Boolean(state.error);
-  } else if (state.view.length === 0) {
-    container.replaceChildren(
-      el("div", { class: "empty stack" }, [
-        el("p", {}, "Aucune pièce climatisée n'a été trouvée sur ce compte Cozytouch."),
-        el("a", { class: "button", href: "/diagnostic" }, "Ouvrir le diagnostic"),
-      ]),
-    );
-  } else {
-    for (const room of state.view) {
-      if (!panes.has(room.id)) panes.set(room.id, createPane(room.id));
-      panes.get(room.id).update(room);
-    }
-    const nodes = state.view.map((room) => panes.get(room.id).node);
-    if (nodes.some((node, i) => container.children[i] !== node) || container.children.length !== nodes.length) {
-      container.replaceChildren(...nodes);
-    }
-  }
+  renderRoom();
 
-  const absence = absenceText(state.absence);
-  $("absence-banner").hidden = !absence;
-  $("absence-text").textContent = absence ?? "";
   // La fiche Absence suit l'état reçu, sauf pendant une saisie.
   if (absenceDialog.open && !state.absenceBusy && !absenceDialog.contains(document.activeElement)) renderAbsence();
 
   $("banner").hidden = !state.error;
   $("banner").textContent = state.error ?? "";
   $("updated").textContent = state.updatedAt
-    ? `À jour à ${new Date(state.updatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+    ? `Données à jour à ${new Date(state.updatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}, relues toutes les 20 s quand l'écran est ouvert.`
     : "";
 
   if (state.sheetRoom !== null) renderSheet();
@@ -653,10 +713,9 @@ document.body.prepend(signin.node);
 
 function showSignin(message) {
   clearInterval(pollTimer);
-  if (sheet.open) sheet.close();
-  if ($("more").open) $("more").close();
-  if (absenceDialog.open) absenceDialog.close();
+  for (const dialog of [sheet, $("more"), absenceDialog]) if (dialog.open) dialog.close();
   $("app").hidden = true;
+  updateThemeColor(null);
   signin.show(message);
 }
 
@@ -676,13 +735,21 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && !$("app").hidden) refresh();
 });
 
-$("refresh").append(icon("refresh"));
-$("refresh").addEventListener("click", refresh);
+for (const dialog of [sheet, $("more"), absenceDialog]) enableDismiss(dialog);
+
+$("ribbon").addEventListener("click", () => {
+  if ($("ribbon").dataset.kind === "absence") return openAbsence();
+  if (state.active !== null) openSheet(state.active, "program");
+});
+$("power").append(icon("power"));
+$("power").addEventListener("click", () => state.active !== null && togglePower(state.active));
+$("open-absence-top").append(icon("bag"));
+$("open-absence-top").addEventListener("click", openAbsence);
 $("open-more").append(icon("more"));
 $("open-more").addEventListener("click", () => $("more").showModal());
 $("more").querySelector("[data-close]").addEventListener("click", () => $("more").close());
+$("refresh").addEventListener("click", refresh);
 $("open-absence").addEventListener("click", openAbsence);
-$("absence-edit").addEventListener("click", openAbsence);
 $("signout").addEventListener("click", async () => {
   try {
     await signOut();

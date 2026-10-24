@@ -38,6 +38,7 @@
 
   --radius: 14px;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* panneaux : départ vif, arrivée douce, comme iOS */
   --font: "Bricolage", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -95,6 +96,19 @@ p {
 
 [hidden] {
   display: none !important;
+}
+
+/* Lu par VoiceOver, invisible à l'écran (sans sortir du flux de focus). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 a {

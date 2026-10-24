@@ -25,33 +25,71 @@
   <body>
     <!-- L'écran de connexion est ajouté ici par session.js. -->
 
-    <div id="app" class="app" hidden>
-      <header class="topbar">
-        <div class="topbar__inner">
-          <span class="brand">Cocon</span>
-          <span class="spacer"></span>
-          <span id="updated" class="small muted"></span>
-          <button id="refresh" class="icon-button" type="button" aria-label="Actualiser"></button>
-          <button id="open-more" class="icon-button" type="button" aria-label="Plus d'options"></button>
-        </div>
-      </header>
-
-      <p id="banner" class="banner" role="alert" hidden></p>
-
-      <div id="absence-banner" class="absence-banner" hidden>
-        <p id="absence-text"></p>
-        <button id="absence-edit" class="button button--quiet" type="button">Modifier</button>
+    <div id="app" class="scene" data-mode="off" hidden>
+      <!-- Niveau coloré : il monte avec la consigne ; la vague va plus vite quand l'unité souffle fort. -->
+      <div id="level" class="level" aria-hidden="true">
+        <svg id="wave" class="wave" viewBox="0 0 780 28" preserveAspectRatio="none" focusable="false">
+          <path d="M0 14 Q 97.5 0 195 14 T 390 14 T 585 14 T 780 14 V 28 H 0 Z" />
+        </svg>
       </div>
 
-      <main id="rooms" class="rooms">
-        <div id="loading" class="loading-rooms">
-          <span class="spinner" aria-hidden="true"></span>
-          <span>Lecture de vos climatiseurs…</span>
-        </div>
-      </main>
+      <div class="scene__inner">
+        <header class="bar">
+          <div id="tabs" class="tabs" role="group" aria-label="Pièce"></div>
+          <button id="open-absence-top" class="tool" type="button" aria-label="Absence de toute la maison"></button>
+          <button id="power" class="tool tool--round" type="button" aria-label="Éteindre"></button>
+          <button id="open-more" class="tool" type="button" aria-label="Plus d'options"></button>
+        </header>
+
+        <p id="banner" class="banner" role="alert" hidden></p>
+
+        <button id="ribbon" class="ribbon" type="button" hidden>
+          <span id="ribbon-icon" class="ribbon__icon" aria-hidden="true"></span>
+          <span id="ribbon-text" class="ribbon__text"></span>
+        </button>
+
+        <main id="room" class="room">
+          <div id="loading" class="loading-rooms">
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Lecture de vos climatiseurs…</span>
+          </div>
+
+          <div id="empty" class="empty stack" hidden>
+            <p>Aucune pièce climatisée n'a été trouvée sur ce compte Cozytouch.</p>
+            <a class="button" href="/diagnostic">Ouvrir le diagnostic</a>
+          </div>
+
+          <!-- Surface de réglage : glisser vers le haut ou le bas règle la consigne, de côté change de pièce. -->
+          <div id="dial" class="dial" hidden>
+            <div id="dial-content" class="dial__content">
+              <p id="dial-state" class="dial__state"></p>
+              <p id="dial-number" class="dial__number" aria-hidden="true">
+                <span id="dial-whole" class="dial__whole"></span>
+                <span class="dial__side">
+                  <span class="dial__degree">°</span>
+                  <span id="dial-decimal" class="dial__decimal"></span>
+                </span>
+              </p>
+              <p id="dial-measured" class="dial__measured"></p>
+              <p id="dial-hint" class="dial__hint"></p>
+            </div>
+            <!-- Pour VoiceOver et le clavier : le même réglage, sous forme de curseur natif. -->
+            <label class="visually-hidden" for="setpoint">Consigne</label>
+            <input id="setpoint" class="visually-hidden" type="range" min="16" max="30" step="0.5" />
+          </div>
+
+          <div id="room-status" class="room__status" hidden>
+            <p id="status-line" class="room__line"></p>
+            <p id="conflict-line" class="room__conflict" hidden></p>
+            <p id="send-line" class="room__send" aria-live="polite"></p>
+          </div>
+
+          <div id="tiles" class="tiles" hidden></div>
+        </main>
+      </div>
     </div>
 
-    <!-- Réglages d'une pièce : rempli par app.js -->
+    <!-- Réglages d'une pièce (mode, vitesse, volets, options, programme) : rempli par app.js -->
     <dialog id="sheet" class="sheet" aria-labelledby="sheet-title"></dialog>
 
     <!-- Absence (toute la maison) : rempli par app.js -->
@@ -59,6 +97,7 @@
 
     <!-- Options du compte -->
     <dialog id="more" class="sheet sheet--small" aria-labelledby="more-title">
+      <div class="sheet__grab" aria-hidden="true"></div>
       <div class="sheet__head">
         <h2 id="more-title">Cocon</h2>
         <span class="spacer"></span>
@@ -66,6 +105,8 @@
       </div>
       <div class="sheet__body">
         <p id="who" class="muted"></p>
+        <p id="updated" class="muted small"></p>
+        <button id="refresh" class="button" type="button">Actualiser maintenant</button>
         <button id="open-absence" class="button button--primary" type="button">Absence</button>
         <a class="button" href="/diagnostic">Ouvrir le diagnostic</a>
         <button id="signout" class="button" type="button">Se déconnecter</button>

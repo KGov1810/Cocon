@@ -53,8 +53,8 @@ function daySummary(slots) {
 export function programGroup(room, { busy, onToggle, onEdit }) {
   const program = room.program;
   const kind = kindFor(room);
+  // Le titre « Programme » est porté par le panneau qui contient ce groupe.
   return el("section", { class: "group" }, [
-    el("h3", {}, "Programme"),
     option(
       "Suivre le programme",
       "Les changements prévus s'appliquent tout seuls, même téléphone éteint.",
