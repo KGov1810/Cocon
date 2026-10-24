@@ -5,7 +5,7 @@
 
 import { el } from "./api.js";
 import { describeAbsence } from "./logic.js";
-import { chip } from "./ui.js";
+import { chip, sheetHead } from "./ui.js";
 
 const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -60,11 +60,7 @@ export function absenceView(absence, form, { busy, status, onChange, onSubmit, o
       }),
     ]);
 
-  const head = el("div", { class: "sheet__head" }, [
-    el("h2", { id: "absence-title" }, "Absence"),
-    el("span", { class: "spacer" }),
-    el("button", { class: "button button--quiet", type: "button", onclick: onClose }, "Fermer"),
-  ]);
+  const head = sheetHead("absence-title", "Absence", onClose);
 
   const body = [
     el(

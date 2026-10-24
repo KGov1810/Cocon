@@ -1,9 +1,11 @@
 /**
- * Éléments d'interface partagés : icônes, choix (« chips ») et interrupteurs.
+ * Éléments d'interface partagés : icônes, choix (« chips »), interrupteurs et
+ * pièces communes des panneaux (poignée, en-tête, ligne d'état, fermeture).
  * Tout est construit avec le DOM, jamais à partir de HTML.
  */
 
 import { el } from "./api.js";
+import { rubberBand } from "./logic.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -102,4 +104,76 @@ export function option(label, help, checked, disabled, onclick) {
       onclick,
     }),
   ]);
+}
+
+/* ---------- Panneaux ---------- */
+
+export const sheetGrab = () => el("div", { class: "sheet__grab", "aria-hidden": "true" });
+
+/** En-tête « titre + Fermer » ; `id` sert d'étiquette au dialogue (aria-labelledby). */
+export function sheetHead(id, title, onClose) {
+  return el("div", { class: "sheet__head" }, [
+    el("h2", { id }, title),
+    el("span", { class: "spacer" }),
+    el("button", { class: "button button--quiet", type: "button", onclick: onClose }, "Fermer"),
+  ]);
+}
+
+/** Ligne d'état d'un panneau : roue pendant l'envoi, puis le résultat ; `fallback` sans envoi. */
+export function sheetStatus(status, fallback = null) {
+  const text = status?.text ?? fallback;
+  const waiting = status?.kind === "sending" || status?.kind === "draft";
+  return el("p", { class: "sheet__status", "aria-live": "polite", "data-kind": status?.kind ?? "", hidden: !text }, [
+    waiting ? el("span", { class: "spinner", "aria-hidden": "true" }) : null,
+    text,
+  ]);
+}
+
+/**
+ * Fermeture d'un panneau : toucher le fond assombri, ou tirer la poignée (ou
+ * l'en-tête) vers le bas. Un geste ample ou un coup sec suffit.
+ */
+export function enableSheetDismiss(dialog) {
+  let pull = null;
+  let pulled = false; // un geste vient d'avoir lieu : le « click » qui suit ne compte pas
+
+  dialog.addEventListener("click", (event) => {
+    if (pulled) {
+      pulled = false;
+      return;
+    }
+    if (event.target === dialog) dialog.close();
+  });
+
+  dialog.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest(".sheet__grab, .sheet__head") || event.target.closest("button, a, input, select")) return;
+    pull = { id: event.pointerId, y: event.clientY, t: event.timeStamp, moving: false };
+  });
+  dialog.addEventListener("pointermove", (event) => {
+    if (!pull || event.pointerId !== pull.id) return;
+    const dy = event.clientY - pull.y;
+    // On ne prend la main qu'au-delà de quelques pixels : un simple appui reste un appui.
+    if (!pull.moving && Math.abs(dy) < 6) return;
+    if (!pull.moving) {
+      pull.moving = true;
+      dialog.setPointerCapture(event.pointerId);
+      dialog.dataset.pulling = "";
+    }
+    dialog.style.transform = `translateY(${(dy >= 0 ? dy : rubberBand(dy, 400)).toFixed(1)}px)`;
+  });
+  const end = (event, cancelled) => {
+    if (!pull || event.pointerId !== pull.id) return;
+    const { moving, y, t } = pull;
+    pull = null;
+    if (!moving) return;
+    pulled = true;
+    setTimeout(() => (pulled = false), 0); // pas de « click » après ce geste : on oublie
+    const dy = event.clientY - y;
+    const speed = dy / Math.max(1, event.timeStamp - t);
+    delete dialog.dataset.pulling;
+    dialog.style.transform = "";
+    if (!cancelled && (dy > 110 || (dy > 20 && speed > 0.3))) dialog.close();
+  };
+  dialog.addEventListener("pointerup", (event) => end(event, false));
+  dialog.addEventListener("pointercancel", (event) => end(event, true));
 }

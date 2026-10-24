@@ -144,6 +144,65 @@ export function describeAbsence(absence, timeZone) {
 
 /* ---------- Écran d'une pièce : chiffre, niveau, vague et gestes ---------- */
 
+/** Libellés des modes, en entier (titres) et en court (onglets, tuiles, choix). */
+export const MODE_LABEL = {
+  off: "Arrêt",
+  heat: "Chauffage",
+  cool: "Froid",
+  auto: "Auto",
+  fan: "Ventilation",
+  dry: "Déshumidification",
+  unknown: "État inconnu",
+};
+export const MODE_SHORT = { ...MODE_LABEL, dry: "Déshum.", fan: "Ventil." };
+export const FAN_LABEL = { auto: "Auto", low: "Basse", medium: "Moyenne", high: "Haute", quiet: "Silence" };
+
+const ADJUSTABLE = new Set(["heat", "cool", "auto", "dry"]);
+
+/** L'unité tourne (ni arrêtée, ni dans un état inconnu, ni hors ligne). */
+export function isRunning(room) {
+  return Boolean(room.available) && room.mode !== "off" && room.mode !== "unknown";
+}
+
+/** La consigne existe dans ce mode et se règle maintenant. */
+export function canAdjust(room) {
+  return Boolean(room.available && ADJUSTABLE.has(room.mode) && room.setpointRange && room.setpoint !== null);
+}
+
+const STATUS_VISIBLE_MS = 45_000;
+
+/** Retour de commande encore à montrer : l'envoi en cours, ou un résultat de moins de 45 s ; sinon null. */
+export function shownStatus(status, now) {
+  if (!status) return null;
+  return status.kind === "sending" || status.kind === "draft" || now - status.at < STATUS_VISIBLE_MS ? status : null;
+}
+
+/**
+ * Ligne d'état sous le chiffre.
+ * @param {{ absent?: boolean, onMode?: string | null }} context  absence en cours ; mode de rallumage
+ */
+export function describeRoom(room, { absent, onMode } = {}) {
+  if (!room.available) return "Unité injoignable : vérifiez le hub Cozytouch.";
+  if (absent) return "Arrêtée pendant l'absence";
+  const t = typeof room.temperature === "number" ? room.temperature : null;
+  switch (room.mode) {
+    case "heat":
+      return t !== null && t >= room.setpoint ? "Consigne atteinte, l'unité ralentit" : "Chauffe pour atteindre la consigne";
+    case "cool":
+      return t !== null && t <= room.setpoint ? "Consigne atteinte, l'unité ralentit" : "Refroidit pour atteindre la consigne";
+    case "auto":
+      return "Chauffe ou refroidit selon la pièce";
+    case "dry":
+      return "Déshumidifie la pièce";
+    case "fan":
+      return "Ventilation seule, sans consigne";
+    case "unknown":
+      return "État inconnu : actualisez dans un instant";
+    default:
+      return onMode ? `À l'arrêt · se rallumera en ${MODE_LABEL[onMode].toLowerCase()}` : "À l'arrêt";
+  }
+}
+
 const DEFAULT_RANGE = { min: 16, max: 30, step: 0.5 };
 
 /** 21.5 → { whole: "21", decimal: ",5" } : l'entier s'affiche en grand, la décimale à côté. */

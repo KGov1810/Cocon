@@ -316,10 +316,6 @@ a {
   background: color-mix(in srgb, var(--danger) 10%, var(--surface));
 }
 
-.notice--ok {
-  color: var(--ok);
-  background: color-mix(in srgb, var(--ok) 10%, var(--surface));
-}
 
 .badge {
   display: inline-flex;

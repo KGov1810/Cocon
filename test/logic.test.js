@@ -4,19 +4,23 @@ import assert from "node:assert/strict";
 
 import {
   applyOptimistic,
+  canAdjust,
   conflictWith,
   daysFor,
   describeAbsence,
+  describeRoom,
   describeNext,
   describeOutcome,
   formatClock,
   fillLevel,
   formatTemperature,
   isFlick,
+  isRunning,
   optionsSummary,
   powerOnMode,
   rubberBand,
   setpointFromDrag,
+  shownStatus,
   splitTemperature,
   validateDraft,
   waveLevel,
@@ -315,5 +319,53 @@ describe("écran : résumé des options", () => {
 
   it("n'a pas de tuile si l'unité n'a aucune de ces options", () => {
     assert.equal(optionsSummary(room()), null);
+  });
+});
+
+describe("écran : état de la pièce", () => {
+  it("distingue une pièce qui tourne d'une pièce arrêtée, inconnue ou hors ligne", () => {
+    assert.equal(isRunning(room()), true);
+    assert.equal(isRunning(room({ mode: "off" })), false);
+    assert.equal(isRunning(room({ mode: "unknown" })), false);
+    assert.equal(isRunning(room({ available: false })), false);
+  });
+
+  it("ne laisse régler la consigne au doigt que si elle existe dans ce mode", () => {
+    assert.equal(canAdjust(room()), true);
+    assert.equal(canAdjust(room({ mode: "dry" })), true);
+    assert.equal(canAdjust(room({ mode: "off" })), false);
+    assert.equal(canAdjust(room({ mode: "fan", setpoint: null, setpointRange: null })), false);
+    assert.equal(canAdjust(room({ mode: "fan" })), false); // même si une consigne traîne
+    assert.equal(canAdjust(room({ available: false })), false);
+  });
+
+  it("dit si l'unité chauffe encore ou si la consigne est atteinte", () => {
+    assert.equal(describeRoom(room({ temperature: 19 }), {}), "Chauffe pour atteindre la consigne");
+    assert.equal(describeRoom(room({ temperature: 21 }), {}), "Consigne atteinte, l'unité ralentit");
+    assert.equal(describeRoom(room({ mode: "cool", setpoint: 24, temperature: 26 }), {}), "Refroidit pour atteindre la consigne");
+    assert.equal(describeRoom(room({ mode: "cool", setpoint: 24, temperature: 23 }), {}), "Consigne atteinte, l'unité ralentit");
+    assert.equal(describeRoom(room({ mode: "cool", setpoint: 24, temperature: 24 }), {}), "Consigne atteinte, l'unité ralentit");
+  });
+
+  it("annonce le mode de rallumage d'une pièce arrêtée", () => {
+    assert.equal(describeRoom(room({ mode: "off" }), { onMode: "heat" }), "À l'arrêt · se rallumera en chauffage");
+    assert.equal(describeRoom(room({ mode: "off" }), {}), "À l'arrêt");
+  });
+
+  it("donne la priorité à la panne puis à l'absence", () => {
+    assert.equal(describeRoom(room({ available: false }), { absent: true }), "Unité injoignable : vérifiez le hub Cozytouch.");
+    assert.equal(describeRoom(room(), { absent: true }), "Arrêtée pendant l'absence");
+  });
+});
+
+describe("écran : retour de commande", () => {
+  it("garde l'envoi et la saisie en cours affichés, puis efface le résultat après 45 s", () => {
+    const at = 1_000_000;
+    assert.equal(shownStatus(null, at), null);
+    assert.equal(shownStatus(undefined, at), null); // pièce sans commande récente (Map.get)
+    assert.deepEqual(shownStatus({ kind: "sending", text: "…", at }, at + 120_000), { kind: "sending", text: "…", at });
+    assert.equal(shownStatus({ kind: "draft", text: "…", at }, at + 120_000).kind, "draft");
+    assert.equal(shownStatus({ kind: "ok", text: "Confirmé", at }, at + 44_999).kind, "ok");
+    assert.equal(shownStatus({ kind: "ok", text: "Confirmé", at }, at + 45_000), null);
   });
 });

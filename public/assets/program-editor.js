@@ -1,7 +1,7 @@
 /**
  * Programme hebdomadaire côté interface :
  * - programLine() : la ligne affichée sur le panneau d'une pièce ;
- * - programGroup() : le groupe « Programme » de la fiche de réglages ;
+ * - programGroup() : le contenu du panneau Programme (suivi, résumé du jour) ;
  * - editorView() : l'éditeur jour par jour (créneaux, copie vers d'autres jours).
  *
  * L'état de l'éditeur vit dans app.js ; ce module ne fait qu'afficher et
@@ -49,11 +49,10 @@ function daySummary(slots) {
   return slots.map((s) => `${formatClock(s.minutes)} ${s.off ? "arrêt" : formatTemperature(s.setpoint)}`).join(", ");
 }
 
-/** Groupe « Programme » de la fiche de réglages. */
+/** Contenu du panneau Programme : suivre ou non, résumé du jour, accès à l'éditeur. */
 export function programGroup(room, { busy, onToggle, onEdit }) {
   const program = room.program;
   const kind = kindFor(room);
-  // Le titre « Programme » est porté par le panneau qui contient ce groupe.
   return el("section", { class: "group" }, [
     option(
       "Suivre le programme",
@@ -178,7 +177,7 @@ function slotRow(slot, index, ctx) {
 }
 
 /**
- * Vue de l'éditeur dans la fiche.
+ * Vue de l'éditeur dans le panneau Programme.
  * @returns {{ head: HTMLElement, body: HTMLElement[] }}
  */
 export function editorView(room, editor, { busy, status, onChange, onSave, onCancel, onBack }) {
@@ -199,7 +198,7 @@ export function editorView(room, editor, { busy, status, onChange, onSave, onCan
 
   const kinds = ["heat", "cool"].filter((k) => program[k]);
   const head = el("div", { class: "sheet__head" }, [
-    el("button", { class: "icon-button", type: "button", "aria-label": "Retour aux réglages", onclick: onBack }, icon("back")),
+    el("button", { class: "icon-button", type: "button", "aria-label": "Retour au programme", onclick: onBack }, icon("back")),
     el("h2", { id: "sheet-title" }, `Programme, ${room.name}`),
   ]);
 

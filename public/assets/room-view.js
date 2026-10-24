@@ -1,6 +1,7 @@
 /**
- * Écran d'une pièce : onglets, grand chiffre réglable au doigt, niveau coloré
- * et vague, état de la pièce et quatre tuiles.
+ * Écran d'une pièce : onglets, marche/arrêt, bandeau (programme ou absence),
+ * grand chiffre réglable au doigt, niveau coloré et vague, lignes d'état,
+ * quatre tuiles et couleur de la barre d'état.
  *
  * Ce module affiche et traduit les gestes ; l'état et les envois vivent dans
  * app.js, qui lui passe à chaque rendu ce qu'il faut montrer.
@@ -14,32 +15,58 @@
  */
 
 import { el } from "./api.js";
-import { fillLevel, formatTemperature, isFlick, rubberBand, setpointFromDrag, splitTemperature, waveLevel } from "./logic.js";
+import {
+  FAN_LABEL,
+  MODE_LABEL,
+  MODE_SHORT,
+  canAdjust,
+  conflictWith,
+  describeRoom,
+  fillLevel,
+  formatTemperature,
+  isFlick,
+  isRunning,
+  optionsSummary,
+  rubberBand,
+  setpointFromDrag,
+  splitTemperature,
+  waveLevel,
+} from "./logic.js";
+import { absenceText } from "./absence-view.js";
+import { programLine } from "./program-editor.js";
 import { icon } from "./ui.js";
 
 const AXIS_THRESHOLD = 12;
 const PX_PER_STEP = 22;
-const ADJUSTABLE = new Set(["heat", "cool", "auto", "dry"]);
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
+// Valeurs des tuiles : courtes, pour tenir sur une ligne.
+const MODE_TILE = { ...MODE_SHORT, heat: "Chaud", unknown: "—" };
+// Couleur de la barre d'état de l'iPhone : celle du haut de l'écran.
+const SCENE_COLOR = { heat: "#c93c17", cool: "#1d62b0", auto: "#5e43c2", fan: "#0d6e63", dry: "#0d6e63" };
 
 const $ = (id) => document.getElementById(id);
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** Le doigt peut régler la consigne de cette pièce maintenant. */
-export function canAdjust(room) {
-  return Boolean(room?.available && ADJUSTABLE.has(room.mode) && room.setpointRange && room.setpoint !== null);
+/* La barre d'état prend la couleur du haut de l'écran ; à l'arrêt, celle du thème. */
+const themeMetas = [...document.querySelectorAll('meta[name="theme-color"]')].map((meta) => ({ meta, base: meta.content }));
+function setThemeColor(color) {
+  for (const { meta, base } of themeMetas) meta.content = color ?? base;
 }
 
 /**
  * @param {{
- *   onSelect: (id: number, from: "left" | "right" | null) => void,
+ *   onSelect: (id: number, from: "left" | "right") => void,
  *   onCommit: (id: number, value: number) => void,
  *   onDraft: (id: number, value: number) => void,
  *   onOpen: (id: number, kind: string) => void,
+ *   onPower: (id: number) => void,
+ *   onAbsence: () => void,
  * }} handlers
  */
 export function createRoomView(handlers) {
   const scene = $("app");
+  const power = $("power");
+  const ribbon = $("ribbon");
   const level = $("level");
   const wave = $("wave");
   const tabs = $("tabs");
@@ -53,6 +80,7 @@ export function createRoomView(handlers) {
   const hint = $("dial-hint");
   const range = $("setpoint");
   const tiles = $("tiles");
+  const sections = [dial, $("room-status"), tiles];
 
   let rooms = [];
   let room = null; // pièce affichée
@@ -160,7 +188,7 @@ export function createRoomView(handlers) {
 
   /* ---------- Onglets et tuiles ---------- */
 
-  function renderTabs(modeLabel) {
+  function renderTabs() {
     const signature = rooms.map((r) => `${r.id}:${r.name}`).join("|");
     if (tabs.dataset.signature !== signature) {
       tabs.dataset.signature = signature;
@@ -176,8 +204,7 @@ export function createRoomView(handlers) {
     tabs.hidden = rooms.length < 2;
     for (const button of tabs.children) {
       const r = rooms.find((x) => String(x.id) === button.dataset.id);
-      const on = r.available && r.mode !== "off" && r.mode !== "unknown";
-      const sub = `${formatTemperature(r.temperature)} · ${r.available ? (on ? modeLabel[r.mode] : "Arrêt") : "Hors ligne"}`;
+      const sub = `${formatTemperature(r.temperature)} · ${r.available ? (isRunning(r) ? MODE_SHORT[r.mode] : "Arrêt") : "Hors ligne"}`;
       button.firstChild.textContent = r.name;
       button.lastChild.textContent = sub;
       button.setAttribute("aria-pressed", r.id === room.id ? "true" : "false");
@@ -216,29 +243,48 @@ export function createRoomView(handlers) {
     }
   }
 
+  power.append(icon("power"));
+  power.addEventListener("click", () => room && handlers.onPower(room.id));
+  ribbon.addEventListener("click", () => {
+    if (ribbon.dataset.kind === "absence") return handlers.onAbsence();
+    if (room) handlers.onOpen(room.id, "program");
+  });
+
   /* ---------- Rendu ---------- */
 
   let ctx = null;
 
   /**
    * @param {object} next
-   * @param {object[]} next.rooms           pièces affichées (valeurs en attente comprises)
-   * @param {object} next.room              pièce active
-   * @param {"left"|"right"|null} next.enter côté d'où arrive la pièce, après un changement
-   * @param {object} next.labels            { mode, fan, options }
-   * @param {string} next.idleHint          aide affichée quand on ne glisse pas
+   * @param {object[]} next.rooms         pièces affichées (valeurs en attente comprises)
+   * @param {object} next.room            pièce active
+   * @param {object|null} next.absence    absence renvoyée par le relais
+   * @param {boolean} next.busy           une commande est en cours pour la pièce
+   * @param {object|null} next.status     retour de commande à montrer (voir shownStatus)
+   * @param {string|null} next.updatedAt  date de la dernière lecture
+   * @param {string|null} next.onMode     mode de rallumage d'une pièce arrêtée
    */
   function update(next) {
     ctx = next;
     rooms = next.rooms;
-    const previous = room?.id;
     room = next.room;
-    idleHint = next.idleHint;
+    if (canAdjust(room)) idleHint = rooms.length > 1 ? "Glissez ↕ pour régler · ↔ pour changer de pièce" : "Glissez vers le haut ou le bas pour régler";
+    else idleHint = rooms.length > 1 ? "Glissez ↔ pour changer de pièce" : "";
+    for (const node of sections) node.hidden = false;
     render();
-    if (previous !== undefined && previous !== room.id && next.enter && !drag) enter(next.enter);
   }
 
-  function enter(from) {
+  /** Aucune pièce à montrer (chargement, compte vide, déconnexion). */
+  function clear() {
+    ctx = null;
+    room = null;
+    scene.dataset.mode = "off";
+    for (const node of [ribbon, power, ...sections]) node.hidden = true;
+    setThemeColor(null);
+  }
+
+  /** La nouvelle pièce glisse depuis le côté d'où elle vient. */
+  function slideIn(from) {
     const offset = reducedMotion() ? 0 : from === "right" ? 56 : -56;
     content.animate(
       [
@@ -251,12 +297,13 @@ export function createRoomView(handlers) {
 
   function render() {
     if (!ctx || !room) return;
-    const { labels } = ctx;
-    const on = room.available && room.mode !== "off" && room.mode !== "unknown";
+    const absent = ctx.absence?.status === "on";
+    const on = isRunning(room);
     const adjustable = canAdjust(room);
 
-    scene.dataset.mode = room.available ? (ctx.absent ? "off" : room.mode) : "off";
-    renderTabs(labels.mode);
+    scene.dataset.mode = room.available && !absent ? room.mode : "off";
+    renderTabs();
+    renderBar(on);
 
     // Pendant un glissement, le doigt garde la main sur le chiffre et le niveau.
     if (!drag || drag.axis !== "y") {
@@ -266,7 +313,7 @@ export function createRoomView(handlers) {
       hint.textContent = idleHint;
     }
     number.toggleAttribute("data-dim", !on || !adjustable);
-    stateLabel.textContent = room.available ? (ctx.absent ? "Absence" : labels.mode[room.mode]) : "Hors ligne";
+    stateLabel.textContent = room.available ? (absent ? "Absence" : MODE_SHORT[room.mode]) : "Hors ligne";
     measured.textContent =
       room.mode === "fan"
         ? "Température de la pièce, ventilation seule"
@@ -274,7 +321,7 @@ export function createRoomView(handlers) {
           ? `Il fait ${formatTemperature(room.temperature)} dans la pièce`
           : "Température de la pièce indisponible";
 
-    const strength = ctx.absent ? 0 : waveLevel(room);
+    const strength = absent ? 0 : waveLevel(room);
     wave.style.animationDuration = `${(6 - 4.5 * strength).toFixed(2)}s`;
     wave.toggleAttribute("data-still", strength === 0);
 
@@ -291,8 +338,8 @@ export function createRoomView(handlers) {
 
     const louver = room.louver === "swing" ? "Balayage" : room.louver ? `Pos. ${room.louver}` : "—";
     const disabled = !room.available;
-    renderTile("mode", "Mode", labels.tile[room.mode] ?? "—", room.mode in labels.mode && room.mode !== "unknown" ? room.mode : "off", disabled);
-    renderTile("fan", "Vitesse", room.fanSpeeds?.length ? (labels.fan[room.fan] ?? "—") : null, "speed", disabled);
+    renderTile("mode", "Mode", MODE_TILE[room.mode] ?? "—", room.mode in MODE_LABEL && room.mode !== "unknown" ? room.mode : "off", disabled);
+    renderTile("fan", "Vitesse", room.fanSpeeds?.length ? (FAN_LABEL[room.fan] ?? "—") : null, "speed", disabled);
     renderTile(
       "louver",
       "Volets",
@@ -301,8 +348,55 @@ export function createRoomView(handlers) {
       disabled,
       louver.replace("Pos.", "position"),
     );
-    renderTile("options", "Options", labels.options, room.powerful ? "boost" : "eco", disabled);
+    renderTile("options", "Options", optionsSummary(room), room.powerful ? "boost" : "eco", disabled);
+
+    renderStatus(on, absent);
+    setThemeColor(on && !absent ? SCENE_COLOR[room.mode] : null);
   }
 
-  return { update };
+  /** Marche/arrêt et bandeau : absence en cours, sinon programme de la pièce. */
+  function renderBar(on) {
+    power.hidden = !room.available;
+    power.disabled = ctx.busy;
+    power.setAttribute("aria-pressed", on ? "true" : "false");
+    power.setAttribute("aria-label", on ? `Éteindre : ${room.name}` : `Allumer : ${room.name}`);
+
+    const absence = absenceText(ctx.absence);
+    let text = null;
+    let iconName = "calendar";
+    if (absence) {
+      text = absence;
+      iconName = "bag";
+    } else if (room.program && room.available) {
+      text = programLine(room) ?? "Programme désactivé · le régler";
+      iconName = room.program.override?.active ? "clock" : "calendar";
+    }
+    ribbon.hidden = !text;
+    $("ribbon-text").textContent = text ?? "";
+    ribbon.dataset.kind = absence ? "absence" : "program";
+    if (ribbon.dataset.icon !== iconName) {
+      ribbon.dataset.icon = iconName;
+      $("ribbon-icon").replaceChildren(icon(iconName));
+    }
+  }
+
+  /** Ligne d'état, conflit multi-split, retour de commande (ou heure de mise à jour). */
+  function renderStatus(on, absent) {
+    $("status-line").textContent = describeRoom(room, { absent, onMode: ctx.onMode });
+    const conflict = on && !absent ? conflictWith(rooms, room.id, room.mode) : null;
+    $("conflict-line").hidden = !conflict;
+    $("conflict-line").textContent = conflict
+      ? `${conflict.name} est en ${MODE_LABEL[conflict.mode].toLowerCase()} : une seule unité extérieure ne peut pas chauffer et refroidir en même temps.`
+      : "";
+
+    const { status, updatedAt } = ctx;
+    const updated = updatedAt
+      ? `À jour à ${new Date(updatedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} · vague estimée d'après vos réglages`
+      : "";
+    const sendLine = $("send-line");
+    sendLine.dataset.kind = status?.kind ?? "";
+    sendLine.replaceChildren(el("span", { class: "room__dot", "aria-hidden": "true" }), status?.text ?? updated);
+  }
+
+  return { update, clear, slideIn };
 }
