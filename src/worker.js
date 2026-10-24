@@ -13,7 +13,7 @@ import { AtlanticError, createAtlanticClient } from "./atlantic.js";
 import { clearedSessionCookie, identify, matchKey, sessionCookie } from "./auth.js";
 import { readState, runAbsence, runCommand } from "./commands.js";
 import { buildDiagnostic } from "./diagnostic.js";
-import { CommandError } from "./rooms.js";
+import { CommandError } from "./errors.js";
 
 /** Code HTTP renvoyé pour chaque refus de commande. */
 const COMMAND_ERROR_STATUS = {
@@ -127,11 +127,10 @@ export async function handleApi(request, env, deps = {}) {
     if (route === "GET /api/me") return json({ name: who.name });
 
     const now = deps.now ?? Date.now;
+    const sleep = deps.sleep ?? defaultSleep;
+    const client = createAtlanticClient(env, deps); // aucun appel réseau avant la première requête
 
-    if (route === "GET /api/state") {
-      const client = createAtlanticClient(env, deps);
-      return json(await readState(client, env, now));
-    }
+    if (route === "GET /api/state") return json(await readState(client, env, now));
 
     const roomMatch = request.method === "POST" && url.pathname.match(ROOM_ROUTE);
     if (roomMatch) {
@@ -139,12 +138,11 @@ export async function handleApi(request, env, deps = {}) {
       if (typeof body?.setting !== "string") {
         return apiError(400, "BAD_REQUEST", "Commande invalide.");
       }
-      const client = createAtlanticClient(env, deps);
       const result = await runCommand(
         client,
         env,
         { roomId: Number(roomMatch[1]), setting: body.setting, value: body.value },
-        { now, sleep: deps.sleep ?? defaultSleep },
+        { now, sleep },
       );
       console.log("Commande", who.name, roomMatch[1], body.setting, result.status, `${result.elapsedMs} ms`);
       return json(result, result.status === "confirmed" ? 200 : 202);
@@ -156,16 +154,12 @@ export async function handleApi(request, env, deps = {}) {
         window = await readSmallJson(request);
         if (!window || typeof window !== "object") return apiError(400, "BAD_REQUEST", "Absence invalide.");
       }
-      const client = createAtlanticClient(env, deps);
-      const result = await runAbsence(client, env, window, { now, sleep: deps.sleep ?? defaultSleep });
+      const result = await runAbsence(client, env, window, { now, sleep });
       console.log("Absence", who.name, window ? "programmée" : "annulée", result.status, `${result.elapsedMs} ms`);
       return json(result, result.status === "confirmed" ? 200 : 202);
     }
 
-    if (route === "GET /api/diagnostic") {
-      const client = createAtlanticClient(env, deps);
-      return json(await buildDiagnostic(client, deps.now));
-    }
+    if (route === "GET /api/diagnostic") return json(await buildDiagnostic(client, deps.now));
 
     return apiError(404, "NOT_FOUND", "Route inconnue.");
   } catch (err) {

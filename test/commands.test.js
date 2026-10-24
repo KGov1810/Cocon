@@ -193,6 +193,17 @@ describe("commandes", () => {
     assert.equal((await res.json()).status, "pending");
   });
 
+  it("continue de suivre une exécution momentanément illisible", async () => {
+    // Réponse sans état lisible, puis exécution terminée : ce n'est pas un échec.
+    const { fetchImpl } = fakeAtlantic({ executionStates: [undefined, 3] });
+    const res = await handleApi(command(1001, { setting: "fan", value: "high" }), ENV, {
+      fetchImpl,
+      ...fakeTime(),
+    });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).status, "confirmed");
+  });
+
   it("signale une exécution refusée par Atlantic", async () => {
     const { fetchImpl } = fakeAtlantic({ executionStates: [1, 5] });
     const res = await handleApi(command(1001, { setting: "fan", value: "high" }), ENV, {

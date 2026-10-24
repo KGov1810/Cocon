@@ -2,7 +2,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { CommandError, planCommand, readRooms } from "../src/rooms.js";
+import { CommandError } from "../src/errors.js";
+import { planCommand, readRooms } from "../src/rooms.js";
 import { makeSetup } from "./fixtures/setup.js";
 
 const roomsOf = (options) => readRooms(makeSetup(options));

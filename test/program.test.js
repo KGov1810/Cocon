@@ -2,7 +2,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { CommandError, planCommand, readRooms } from "../src/rooms.js";
+import { CommandError } from "../src/errors.js";
+import { planCommand, readRooms } from "../src/rooms.js";
 import { DEFAULT_DAY, makeSetup } from "./fixtures/setup.js";
 
 /** Mercredi 21 octobre 2026, 21 h 30 à l'heure du logement (UTC+2). */
@@ -17,7 +18,7 @@ const pad = (entries) => JSON.stringify([...entries, ...Array(10 - entries.lengt
 describe("lecture du programme", () => {
   it("lit les deux programmes, les contraintes et l'état Arrêt disponible", () => {
     const { program } = chambre();
-    assert.equal(program.available, true);
+    assert.ok(program);
     assert.equal(program.active, false);
     assert.equal(program.offAvailable, true);
     assert.deepEqual(program.limits, { step: 15, minGap: 60, maxPerDay: 8, minPerWeek: 1 });

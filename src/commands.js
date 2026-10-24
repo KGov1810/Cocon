@@ -9,7 +9,8 @@
  */
 
 import { absenceDevice, ABSENCE_CAP, planAbsence, readAbsence, setupBody, windowValue } from "./absence.js";
-import { CommandError, planCommand, readRooms } from "./rooms.js";
+import { CommandError } from "./errors.js";
+import { planCommand, readRooms } from "./rooms.js";
 
 /** Âge maximal de l'état en cache pour valider une commande. */
 const SETUP_MAX_AGE_MS = 60_000;
@@ -53,24 +54,22 @@ export async function readState(client, env, now) {
   };
 }
 
-/** Suit une exécution : "confirmed", "pending" (délai dépassé) ou "failed". */
-async function waitForExecution(client, executionId, sleep) {
-  for (const delay of EXECUTION_POLL_DELAYS_MS) {
-    await sleep(delay);
-    const state = await client.getExecutionState(executionId);
-    if (state === EXECUTION_DONE) return "confirmed";
-    if (state === null || state === EXECUTION_WAITING || state === EXECUTION_RUNNING) continue;
-    return "failed";
-  }
-  return "pending";
-}
-
-/** Lecture unique de l'état d'une exécution déjà en cours. */
+/** Lit une exécution une fois : "confirmed", "pending" (pas encore finie, ou illisible) ou "failed". */
 async function checkExecution(client, executionId) {
   const state = await client.getExecutionState(executionId);
   if (state === EXECUTION_DONE) return "confirmed";
   if (state === null || state === EXECUTION_WAITING || state === EXECUTION_RUNNING) return "pending";
   return "failed";
+}
+
+/** Suit une exécution jusqu'à sa fin, ou jusqu'au bout du délai d'attente ("pending"). */
+async function waitForExecution(client, executionId, sleep) {
+  for (const delay of EXECUTION_POLL_DELAYS_MS) {
+    await sleep(delay);
+    const outcome = await checkExecution(client, executionId);
+    if (outcome !== "pending") return outcome;
+  }
+  return "pending";
 }
 
 async function send(client, roomId, { capabilityId, value }) {

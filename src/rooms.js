@@ -14,8 +14,6 @@
 import { CommandError } from "./errors.js";
 import { overrideWrites, planSchedule, PROGRAM_CAP, readProgram } from "./program.js";
 
-export { CommandError };
-
 /** Décalage horaire du logement, en secondes (porté par le hub). */
 const TIME_OFFSET_CAP = 315;
 
@@ -246,7 +244,7 @@ export function planCommand(room, setting, value) {
     }
 
     case "program": {
-      if (!room.program?.available) {
+      if (!room.program) {
         throw new CommandError("UNKNOWN_SETTING", "Programme indisponible sur cette unité.");
       }
       requireBoolean(value);

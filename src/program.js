@@ -123,7 +123,6 @@ export function readProgram(get, { mode, now, offsetSeconds }) {
   const followed = kind === "heat" ? heat : kind === "cool" ? cool : null;
 
   return {
-    available: true,
     active,
     offAvailable: ((int(PROGRAM_CAP.extendedStates) ?? 0) & EXTENDED_OFF) !== 0,
     limits: {
@@ -169,7 +168,7 @@ function readSlot(slot, range, program) {
  * @param {{ heat: { min: number, max: number }, cool: { min: number, max: number } }} ranges
  */
 export function planSchedule(program, value, ranges) {
-  if (!program?.available) throw new CommandError("UNKNOWN_SETTING", "Programme indisponible sur cette unité.");
+  if (!program) throw new CommandError("UNKNOWN_SETTING", "Programme indisponible sur cette unité.");
   if (!value || typeof value !== "object") throw invalid("Programme invalide.");
   const { kind, days, slots } = value;
   if ((kind !== "heat" && kind !== "cool") || !program[kind]) throw invalid("Programme inconnu.");
