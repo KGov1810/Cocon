@@ -149,3 +149,78 @@ export function describeAbsence(absence, timeZone) {
   if (absence.status === "on") return `Absence en cours jusqu'au ${formatMoment(absence.end, timeZone)}`;
   return `Absence programmée du ${formatMoment(absence.start, timeZone)} au ${formatMoment(absence.end, timeZone)}`;
 }
+
+/* ---------- Écran d'une pièce : chiffre, niveau, vague et gestes ---------- */
+
+const DEFAULT_RANGE = { min: 16, max: 30, step: 0.5 };
+
+/** 21.5 → { whole: "21", decimal: ",5" } : l'entier s'affiche en grand, la décimale à côté. */
+export function splitTemperature(value) {
+  if (value === null || value === undefined) return { whole: "—", decimal: "" };
+  const [whole, decimal] = oneDecimal.format(value).split(",");
+  return { whole, decimal: decimal ? `,${decimal}` : "" };
+}
+
+/** Hauteur du niveau coloré (part de l'écran) : 12 % à la consigne minimale, 82 % à la maximale. */
+export function fillLevel(room) {
+  const range = room.setpointRange ?? DEFAULT_RANGE;
+  if (room.setpoint === null || room.setpoint === undefined) return 0.12;
+  const ratio = Math.min(1, Math.max(0, (room.setpoint - range.min) / (range.max - range.min)));
+  return Math.round((0.12 + 0.7 * ratio) * 1e4) / 1e4;
+}
+
+const FIXED_FAN = { quiet: 0.25, low: 0.4, medium: 0.6, high: 0.85 };
+
+/**
+ * Force du souffle, de 0 à 1, pour animer la vague. C'est une estimation tirée
+ * des réglages : Atlantic ne publie ni la puissance ni la vitesse réelle.
+ */
+export function waveLevel(room) {
+  if (room.available === false || room.mode === "off" || room.mode === "unknown") return 0;
+  if (room.powerful) return 1;
+  let level = 0.4;
+  const known = typeof room.temperature === "number" && typeof room.setpoint === "number";
+  if (FIXED_FAN[room.fan] !== undefined) level = FIXED_FAN[room.fan];
+  else if (known && room.mode === "heat") level = 0.25 + Math.max(0, room.setpoint - room.temperature) * 0.2;
+  else if (known && (room.mode === "cool" || room.mode === "dry")) level = 0.25 + Math.max(0, room.temperature - room.setpoint) * 0.2;
+  else if (known && room.mode === "auto") level = 0.25 + Math.abs(room.setpoint - room.temperature) * 0.2;
+  level = Math.min(1, level);
+  return room.economy ? level * 0.75 : level;
+}
+
+/**
+ * Consigne visée pendant un glissement vertical : un pas tous les `pxPerStep`
+ * pixels vers le haut. `overshoot` mesure, en pixels, le dépassement des bornes
+ * (positif au-dessus du maximum, négatif sous le minimum) pour l'effet élastique.
+ * @returns {{ value: number, overshoot: number } | null}
+ */
+export function setpointFromDrag(room, start, dy, pxPerStep = 22) {
+  const range = room.setpointRange;
+  if (!range || start === null || start === undefined) return null;
+  const raw = start + (dy / pxPerStep) * range.step;
+  const value = Math.min(range.max, Math.max(range.min, Math.round(raw / range.step) * range.step));
+  let overshoot = 0;
+  if (raw > range.max) overshoot = ((raw - range.max) / range.step) * pxPerStep;
+  else if (raw < range.min) overshoot = ((raw - range.min) / range.step) * pxPerStep;
+  return { value, overshoot };
+}
+
+/** Résistance progressive au-delà d'une borne : plus on tire, moins ça suit. */
+export function rubberBand(overshoot, size, constant = 0.55) {
+  return (overshoot * size * constant) / (size + constant * Math.abs(overshoot));
+}
+
+/** Glissement horizontal assez ample, ou assez vif, pour changer de pièce. */
+export function isFlick(dx, elapsedMs) {
+  const distance = Math.abs(dx);
+  return distance >= 70 || (distance > 24 && distance / Math.max(1, elapsedMs) > 0.25);
+}
+
+/** Résumé de la tuile « Options » ; null si l'unité n'a ni pleine puissance ni économie. */
+export function optionsSummary(room) {
+  if (room.powerful === undefined && room.economy === undefined) return null;
+  if (room.powerful && room.economy) return "Puissance + éco";
+  if (room.powerful) return "Puissance";
+  if (room.economy) return "Économie";
+  return "Aucune";
+}

@@ -10,10 +10,17 @@ import {
   describeNext,
   describeOutcome,
   formatClock,
+  fillLevel,
   formatTemperature,
+  isFlick,
+  optionsSummary,
   powerOnMode,
+  rubberBand,
+  setpointFromDrag,
+  splitTemperature,
   stepSetpoint,
   validateDraft,
+  waveLevel,
 } from "../public/assets/logic.js";
 
 const room = (overrides = {}) => ({
@@ -198,5 +205,132 @@ describe("absence : affichage", () => {
 
   it("ne dit rien sans absence", () => {
     assert.equal(describeAbsence({ status: "off", start: null, end: null }, "Europe/Paris"), null);
+  });
+});
+
+/* ---------- Écran d'une pièce : chiffre, niveau, vague et gestes ---------- */
+
+describe("écran : le grand chiffre", () => {
+  it("sépare l'entier et la décimale", () => {
+    assert.deepEqual(splitTemperature(21.5), { whole: "21", decimal: ",5" });
+  });
+
+  it("n'affiche pas de décimale pour un nombre rond", () => {
+    assert.deepEqual(splitTemperature(21), { whole: "21", decimal: "" });
+  });
+
+  it("affiche un tiret sans valeur", () => {
+    assert.deepEqual(splitTemperature(null), { whole: "—", decimal: "" });
+  });
+});
+
+describe("écran : le niveau monte avec la consigne", () => {
+  it("part de 12 % au minimum et va jusqu'à 82 % au maximum", () => {
+    assert.equal(fillLevel(room({ setpoint: 16 })), 0.12);
+    assert.equal(fillLevel(room({ setpoint: 30 })), 0.82);
+    assert.equal(fillLevel(room({ setpoint: 23 })), 0.47);
+  });
+
+  it("reste dans l'écran même si la consigne sort des bornes du mode", () => {
+    assert.equal(fillLevel(room({ setpoint: 31 })), 0.82);
+    assert.equal(fillLevel(room({ setpoint: 10 })), 0.12);
+  });
+
+  it("reste au plus bas sans consigne (ventilation, arrêt inconnu)", () => {
+    assert.equal(fillLevel(room({ mode: "fan", setpoint: null, setpointRange: null })), 0.12);
+  });
+});
+
+describe("écran : force estimée de la vague", () => {
+  it("est nulle à l'arrêt, en état inconnu ou hors ligne", () => {
+    assert.equal(waveLevel(room({ mode: "off" })), 0);
+    assert.equal(waveLevel(room({ mode: "unknown" })), 0);
+    assert.equal(waveLevel(room({ available: false })), 0);
+  });
+
+  it("suit l'écart à combler dans le sens du mode, en ventilation auto", () => {
+    assert.equal(waveLevel(room({ mode: "heat", setpoint: 22, temperature: 20 })), 0.65);
+    assert.equal(waveLevel(room({ mode: "heat", setpoint: 20, temperature: 22 })), 0.25);
+    assert.equal(waveLevel(room({ mode: "cool", setpoint: 24, temperature: 26 })), 0.65);
+  });
+
+  it("suit l'écart dans les deux sens en mode auto", () => {
+    assert.equal(waveLevel(room({ mode: "auto", setpoint: 20, temperature: 22 })), 0.65);
+    assert.equal(waveLevel(room({ mode: "auto", setpoint: 24, temperature: 22 })), 0.65);
+  });
+
+  it("suit la vitesse choisie quand elle est fixée", () => {
+    assert.equal(waveLevel(room({ fan: "quiet", temperature: 18 })), 0.25);
+    assert.equal(waveLevel(room({ fan: "high", temperature: 18 })), 0.85);
+  });
+
+  it("est au maximum en pleine puissance et réduite en économie", () => {
+    assert.equal(waveLevel(room({ powerful: true, temperature: 21 })), 1);
+    assert.equal(waveLevel(room({ fan: "high", economy: true, temperature: 18 })), 0.6375);
+  });
+
+  it("reste moyenne quand la température de la pièce est inconnue", () => {
+    assert.equal(waveLevel(room({ temperature: null })), 0.4);
+  });
+
+  it("ne dépasse jamais 1", () => {
+    assert.equal(waveLevel(room({ mode: "heat", setpoint: 30, temperature: 10 })), 1);
+  });
+});
+
+describe("écran : glisser pour régler la consigne", () => {
+  it("monte d'un pas tous les 22 px vers le haut", () => {
+    assert.deepEqual(setpointFromDrag(room(), 21, 44), { value: 22, overshoot: 0 });
+    assert.deepEqual(setpointFromDrag(room(), 21, -22), { value: 20.5, overshoot: 0 });
+  });
+
+  it("arrondit au pas le plus proche", () => {
+    assert.equal(setpointFromDrag(room(), 21, 30).value, 21.5);
+    assert.equal(setpointFromDrag(room(), 21, 10).value, 21);
+  });
+
+  it("s'arrête aux bornes et mesure le dépassement en pixels", () => {
+    assert.deepEqual(setpointFromDrag(room(), 29, 88), { value: 30, overshoot: 44 });
+    assert.deepEqual(setpointFromDrag(room(), 17, -66), { value: 16, overshoot: -22 });
+  });
+
+  it("respecte les bornes propres au mode froid", () => {
+    const cool = room({ mode: "cool", setpointRange: { min: 18, max: 30, step: 0.5 } });
+    assert.equal(setpointFromDrag(cool, 18.5, -44).value, 18);
+  });
+
+  it("ne règle rien sans consigne", () => {
+    assert.equal(setpointFromDrag(room({ setpoint: null, setpointRange: null }), null, 44), null);
+  });
+});
+
+describe("écran : gestes", () => {
+  it("freine de plus en plus au-delà d'une borne, sans jamais s'arrêter net", () => {
+    assert.equal(rubberBand(0, 280), 0);
+    const near = rubberBand(20, 280);
+    const far = rubberBand(400, 280);
+    assert.ok(near > 0 && near < 20);
+    assert.ok(far > near && far < 0.55 * 280);
+    assert.equal(rubberBand(-20, 280), -near);
+  });
+
+  it("change de pièce sur un geste ample ou un coup sec", () => {
+    assert.equal(isFlick(-80, 600), true);
+    assert.equal(isFlick(30, 80), true);
+    assert.equal(isFlick(30, 400), false);
+    assert.equal(isFlick(10, 20), false);
+  });
+});
+
+describe("écran : résumé des options", () => {
+  it("nomme les options actives", () => {
+    assert.equal(optionsSummary(room({ powerful: false, economy: true })), "Économie");
+    assert.equal(optionsSummary(room({ powerful: true, economy: false })), "Puissance");
+    assert.equal(optionsSummary(room({ powerful: true, economy: true })), "Puissance + éco");
+    assert.equal(optionsSummary(room({ powerful: false, economy: false })), "Aucune");
+  });
+
+  it("n'a pas de tuile si l'unité n'a aucune de ces options", () => {
+    assert.equal(optionsSummary(room()), null);
   });
 });
