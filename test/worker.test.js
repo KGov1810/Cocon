@@ -167,6 +167,27 @@ describe("session", () => {
     assert.equal(broken.status, 400);
   });
 
+  it("arrête de lire un corps trop gros sans attendre la fin", async () => {
+    // Corps envoyé par morceaux, sans taille annoncée : 1 000 morceaux de 1 Ko.
+    let pulled = 0;
+    const body = new ReadableStream({
+      pull(controller) {
+        pulled += 1;
+        if (pulled > 1000) return controller.close();
+        controller.enqueue(new Uint8Array(1024).fill(32));
+      },
+    });
+    const req = new Request(`${ORIGIN}/api/session`, {
+      method: "POST",
+      headers: { Origin: ORIGIN, "Content-Type": "application/json" },
+      body,
+      duplex: "half",
+    });
+    const res = await handleApi(req, ENV);
+    assert.equal(res.status, 400);
+    assert.ok(pulled < 5, `${pulled} morceaux lus`);
+  });
+
   it("ferme la session", async () => {
     const req = new Request(`${ORIGIN}/api/session`, { method: "DELETE", headers: { Origin: ORIGIN } });
     const res = await handleApi(req, ENV);

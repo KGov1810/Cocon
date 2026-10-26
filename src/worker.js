@@ -69,12 +69,25 @@ function fromAtlanticError(err) {
   }
 }
 
-/** Lit un petit corps JSON ; null s'il est trop gros ou illisible. */
+/**
+ * Lit un petit corps JSON ; null s'il est trop gros ou illisible. La lecture
+ * s'arrête dès que la limite est dépassée : un corps énorme n'est jamais chargé.
+ */
 async function readSmallJson(request) {
-  const text = await request.text();
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return null;
+  if (!request.body) return null;
+  const reader = request.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (let read = await reader.read(); !read.done; read = await reader.read()) {
+    size += read.value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(read.value);
+  }
   try {
-    return JSON.parse(text);
+    return JSON.parse(await new Blob(chunks).text());
   } catch {
     return null;
   }
@@ -159,7 +172,7 @@ export async function handleApi(request, env, deps = {}) {
       return json(result, result.status === "confirmed" ? 200 : 202);
     }
 
-    if (route === "GET /api/diagnostic") return json(await buildDiagnostic(client, deps.now));
+    if (route === "GET /api/diagnostic") return json(await buildDiagnostic(client, now));
 
     return apiError(404, "NOT_FOUND", "Route inconnue.");
   } catch (err) {

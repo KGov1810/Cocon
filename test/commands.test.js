@@ -204,6 +204,17 @@ describe("commandes", () => {
     assert.equal((await res.json()).status, "confirmed");
   });
 
+  it("ne prend pas un état vide (null) pour un refus", async () => {
+    // État vide, puis terminé (envoyé en texte, ce qu'Atlantic peut faire).
+    const { fetchImpl } = fakeAtlantic({ executionStates: [null, "3"] });
+    const res = await handleApi(command(1001, { setting: "fan", value: "high" }), ENV, {
+      fetchImpl,
+      ...fakeTime(),
+    });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).status, "confirmed");
+  });
+
   it("signale une exécution refusée par Atlantic", async () => {
     const { fetchImpl } = fakeAtlantic({ executionStates: [1, 5] });
     const res = await handleApi(command(1001, { setting: "fan", value: "high" }), ENV, {

@@ -250,7 +250,9 @@ export function createAtlanticClient(env, deps = {}) {
      */
     async getExecutionState(executionId) {
       const { status, body } = await authed("suivi", `/magellan/executions/${executionId}`);
-      const state = status === 200 ? Number(body?.state) : Number.NaN;
+      // Un état vide (null, "") est illisible, pas un échec : Number() le changerait en 0.
+      const raw = status === 200 ? body?.state : null;
+      const state = raw == null || raw === "" ? Number.NaN : Number(raw);
       return Number.isInteger(state) ? state : null;
     },
   };
