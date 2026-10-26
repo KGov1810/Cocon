@@ -39,8 +39,9 @@
 .scene[data-mode="fan"],
 .scene[data-mode="dry"] {
   --scene-ink: var(--on-color);
-  --scene-soft: color-mix(in srgb, var(--on-color) 84%, transparent);
-  --level-color: rgb(255 247 242 / 0.16);
+  /* Contraste des petits textes ≥ 4,5:1, même sur le niveau (voile sombre). */
+  --scene-soft: color-mix(in srgb, var(--on-color) 88%, transparent);
+  --level-color: rgb(21 33 44 / 0.18);
   --glass: rgb(21 33 44 / 0.16);
   --glass-line: rgb(255 247 242 / 0.38);
   --tabs-bg: rgb(21 33 44 / 0.18);
