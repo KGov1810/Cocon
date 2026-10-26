@@ -21,6 +21,7 @@ iPhone (appli web Cocon)  →  Worker Cloudflare « cocon »  →  Cloud Atlanti
 | Tableau de bord : panneaux de réglages | Contenu des panneaux Mode, Vitesse, Volets, Options et Programme. | `public/assets/settings-view.js` |
 | Logique d'affichage et éléments partagés | Calculs sans DOM, testés (`test/logic.test.js`) ; icônes, choix, interrupteurs, poignée, en-tête, ligne d'état et fermeture des panneaux. | `public/assets/logic.js`, `public/assets/ui.js` |
 | Programme et absence (interface) | Texte du bandeau de programme, éditeur jour par jour, texte du bandeau et fiche Absence. | `public/assets/program-editor.js`, `public/assets/absence-view.js` |
+| Tests dans le navigateur | Serveur d'essai (application + vrai code du relais + faux cloud Atlantic en mémoire) et scénario Chromium : parcours, mise en page, accessibilité (axe-core). | `e2e/` |
 | Installation sur l'écran d'accueil | Manifeste et icônes. | `public/manifest.webmanifest`, `public/assets/icons/` |
 | Diagnostic | Lecture seule de tout ce que le compte expose, données sensibles masquées. | `src/diagnostic.js`, `public/diagnostic.html` |
 

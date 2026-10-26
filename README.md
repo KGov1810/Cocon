@@ -183,6 +183,15 @@ npm test                         # tests du relais et de l'affichage, sans rése
 npm run dev                      # application sur http://localhost:8787
 ```
 
+Tests dans un vrai navigateur (parcours complet, mise en page, accessibilité en clair
+et en sombre) : ils utilisent un faux cloud Atlantic en mémoire, sans identifiants ni
+réseau, et ne lisent pas `.dev.vars`.
+
+```bash
+npx playwright install chromium  # une seule fois : télécharge le navigateur de test
+npm run e2e                      # environ 40 s
+```
+
 ## Crédits
 
 Les routes de l'API Magellan sont documentées par le projet open source
