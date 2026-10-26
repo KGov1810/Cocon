@@ -22,6 +22,7 @@ import { settingsView } from "./settings-view.js";
 const POLL_MS = 20_000;
 const OPTIMISTIC_MS = 90_000;
 const SETPOINT_DEBOUNCE_MS = 1200;
+const BUSY_TEXT = "Une commande est déjà en cours pour cette pièce : réessayez dans un instant.";
 
 const $ = (id) => document.getElementById(id);
 
@@ -154,7 +155,7 @@ function commitSetpoint(id, value) {
   clearTimeout(state.drafts.get(id));
   state.drafts.delete(id);
   if (state.busy.has(id)) {
-    setStatus(id, "error", "Une commande est déjà en cours pour cette pièce : réessayez dans un instant.");
+    setStatus(id, "error", BUSY_TEXT);
     return render();
   }
   if (value !== room.setpoint) send(room, "setpoint", value, { setpoint: value });
@@ -164,7 +165,12 @@ function commitSetpoint(id, value) {
 /** Curseur natif (clavier, VoiceOver) : la consigne part après le dernier réglage. */
 function draftSetpoint(id, value) {
   const room = roomById(id);
-  if (!room || state.busy.has(id)) return;
+  if (!room) return;
+  if (state.busy.has(id)) {
+    // Comme au doigt : on le dit, et le chiffre revient à la consigne actuelle.
+    setStatus(id, "error", BUSY_TEXT);
+    return render();
+  }
   setOptimistic(id, { setpoint: value });
   setStatus(id, "draft", "Envoi dans un instant…");
   clearTimeout(state.drafts.get(id));

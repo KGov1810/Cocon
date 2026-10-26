@@ -330,7 +330,9 @@ export function createRoomView(handlers) {
       range.max = String(room.setpointRange.max);
       range.step = String(room.setpointRange.step);
     }
-    if (room.setpoint !== null && document.activeElement !== range) range.value = String(room.setpoint);
+    // La valeur en attente d'envoi est déjà dans room.setpoint : le curseur la garde,
+    // et revient à la consigne si l'envoi est refusé.
+    if (room.setpoint !== null) range.value = String(room.setpoint);
     range.setAttribute("aria-valuetext", `${formatTemperature(room.setpoint).replace("°", " degrés")}`);
     range.labels[0].textContent = `Consigne, ${room.name}`;
 
