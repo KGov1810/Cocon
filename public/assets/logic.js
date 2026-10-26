@@ -227,7 +227,7 @@ const FIXED_FAN = { quiet: 0.25, low: 0.4, medium: 0.6, high: 0.85 };
  * des réglages : Atlantic ne publie ni la puissance ni la vitesse réelle.
  */
 export function waveLevel(room) {
-  if (room.available === false || room.mode === "off" || room.mode === "unknown") return 0;
+  if (!isRunning(room)) return 0;
   if (room.powerful) return 1;
   let level = 0.4;
   const known = typeof room.temperature === "number" && typeof room.setpoint === "number";

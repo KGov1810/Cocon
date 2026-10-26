@@ -23,12 +23,12 @@ const APPLY_TO = [
 ];
 
 /** Jour de la semaine sur ce téléphone, 0 = lundi. */
-export function todayIndex(date = new Date()) {
+function todayIndex(date = new Date()) {
   return (date.getDay() + 6) % 7;
 }
 
 /** Programme suivi dans le mode actuel de la pièce. */
-export function kindFor(room) {
+function kindFor(room) {
   if (room.mode === "cool" || room.mode === "dry") return room.program?.cool ? "cool" : "heat";
   return room.program?.heat ? "heat" : "cool";
 }

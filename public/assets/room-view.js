@@ -38,11 +38,8 @@ import { icon } from "./ui.js";
 
 const AXIS_THRESHOLD = 12;
 const PX_PER_STEP = 22;
-const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 // Valeurs des tuiles : courtes, pour tenir sur une ligne.
 const MODE_TILE = { ...MODE_SHORT, heat: "Chaud", unknown: "—" };
-// Couleur de la barre d'état de l'iPhone : celle du haut de l'écran.
-const SCENE_COLOR = { heat: "#c93c17", cool: "#1d62b0", auto: "#5e43c2", fan: "#0d6e63", dry: "#0d6e63" };
 
 const $ = (id) => document.getElementById(id);
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -291,7 +288,8 @@ export function createRoomView(handlers) {
         { opacity: 0, transform: `translateX(${offset}px)` },
         { opacity: 1, transform: "translateX(0)" },
       ],
-      { duration: reducedMotion() ? 160 : 280, easing: ENTER_EASE },
+      // Même courbe que le reste de l'interface (--ease-out, dans styles.css).
+      { duration: reducedMotion() ? 160 : 280, easing: getComputedStyle(scene).getPropertyValue("--ease-out").trim() },
     );
   }
 
@@ -351,7 +349,8 @@ export function createRoomView(handlers) {
     renderTile("options", "Options", optionsSummary(room), room.powerful ? "boost" : "eco", disabled);
 
     renderStatus(on, absent);
-    setThemeColor(on && !absent ? SCENE_COLOR[room.mode] : null);
+    // Barre d'état de l'iPhone : la couleur du mode, lue dans la feuille de style (app.css).
+    setThemeColor(on && !absent ? getComputedStyle(scene).getPropertyValue("--scene-bg").trim() : null);
   }
 
   /** Marche/arrêt et bandeau : absence en cours, sinon programme de la pièce. */
